@@ -1,0 +1,320 @@
+package com.example.banhangtructuyen.application.service;
+
+import com.example.banhangtructuyen.application.dto.product.ProductResponse;
+import com.example.banhangtructuyen.application.service.impl.ProductServiceImpl;
+import com.example.banhangtructuyen.config.AppProperties;
+import com.example.banhangtructuyen.domain.exception.ResourceNotFoundException;
+import com.example.banhangtructuyen.domain.model.Category;
+import com.example.banhangtructuyen.domain.model.Inventory;
+import com.example.banhangtructuyen.domain.model.Product;
+import com.example.banhangtructuyen.domain.repository.ProductRepository;
+import com.example.banhangtructuyen.infrastructure.cache.CacheKeys;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
+
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+/**
+ * Unit tests for {@link ProductServiceImpl}.
+ * Redis and DB are mocked — no Spring context is loaded.
+ *
+ * <p>Coverage matrix:
+ * <ul>
+ *   <li>findAll — cache HIT</li>
+ *   <li>findAll — cache MISS</li>
+ *   <li>findAll — Redis error (graceful fallback)</li>
+ *   <li>findById — cache HIT</li>
+ *   <li>findById — cache MISS, product found</li>
+ *   <li>findById — cache MISS, product NOT found → 404</li>
+ *   <li>findById — Redis down, falls back to DB</li>
+ * </ul>
+ */
+@ExtendWith(MockitoExtension.class)
+class ProductServiceTest {
+
+    // ── Mocks ──────────────────────────────────────────────────────────────
+
+    @Mock private ProductRepository       productRepository;
+    @Mock private StringRedisTemplate     redisTemplate;
+    @Mock private ValueOperations<String, String> valueOps;
+
+    /** Real ObjectMapper — validates actual serialisation/deserialisation. */
+    private final ObjectMapper objectMapper = new ObjectMapper()
+            .registerModule(new JavaTimeModule());
+
+    private AppProperties appProperties;
+
+    @InjectMocks
+    private ProductServiceImpl productService;
+
+    // ── Test Fixtures ──────────────────────────────────────────────────────
+
+    private Product activeProduct;
+    private ProductResponse productResponse;
+
+    @BeforeEach
+    void setUp() throws Exception {
+        // Real AppProperties with defaults
+        appProperties = new AppProperties();
+
+        // Inject via constructor manually (Mockito @InjectMocks cannot inject final field)
+        productService = new ProductServiceImpl(productRepository, redisTemplate, objectMapper, appProperties);
+
+        // Build a minimal ACTIVE product fixture
+        final Category category = Category.builder()
+                .categoryId(1L)
+                .categoryCode("THUC_PHAM")
+                .categoryName("Thực phẩm")
+                .status(Category.CategoryStatus.ACTIVE)
+                .build();
+
+        final Inventory inventory = Inventory.builder()
+                .inventoryId(1L)
+                .quantity(100)
+                .reservedQuantity(5)
+                .build();
+
+        activeProduct = Product.builder()
+                .productId(1L)
+                .productSlug("TP001")
+                .productName("Gạo ST25 5kg")
+                .price(new BigDecimal("180000"))
+                .status(Product.ProductStatus.ACTIVE)
+                .category(category)
+                .inventory(inventory)
+                .build();
+
+        productResponse = new ProductResponse(
+                1L, "Gạo ST25 5kg", "TP001",
+                new BigDecimal("180000"), null, null,
+                1L, "Thực phẩm", 95, "ACTIVE"
+        );
+
+        // Wire valueOps once for all tests that need it
+        when(redisTemplate.opsForValue()).thenReturn(valueOps);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // findAll
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Nested
+    @DisplayName("findAll — Product List")
+    class FindAll {
+
+        @Test
+        @DisplayName("Cache HIT — returns cached page without touching DB")
+        void findAll_cacheHit_returnsPageFromCache() throws Exception {
+            // Arrange
+            final String cacheKey = CacheKeys.productList(0, 20, null, null);
+            final String cachedJson = objectMapper.writeValueAsString(
+                    Map.of("content", List.of(productResponse), "total", 1L));
+
+            when(valueOps.get(cacheKey)).thenReturn(cachedJson);
+
+            // Act
+            final Page<ProductResponse> result = productService.findAll(0, 20, null, null);
+
+            // Assert
+            assertThat(result).isNotNull();
+            assertThat(result.getContent()).hasSize(1);
+            assertThat(result.getTotalElements()).isEqualTo(1L);
+
+            // DB must NOT be touched
+            verifyNoInteractions(productRepository);
+            verify(valueOps, never()).set(anyString(), anyString(), any());
+        }
+
+        @Test
+        @DisplayName("Cache MISS — queries DB, maps results, writes cache")
+        void findAll_cacheMiss_queriesDBAndWritesCache() {
+            // Arrange
+            final String cacheKey = CacheKeys.productList(0, 20, "THUC_PHAM", null);
+            final Page<Product> dbPage = new PageImpl<>(List.of(activeProduct),
+                    PageRequest.of(0, 20), 1L);
+
+            when(valueOps.get(cacheKey)).thenReturn(null);
+            when(productRepository.findActiveProducts(eq("THUC_PHAM"), isNull(), any()))
+                    .thenReturn(dbPage);
+
+            // Act
+            final Page<ProductResponse> result = productService.findAll(0, 20, "THUC_PHAM", null);
+
+            // Assert
+            assertThat(result).isNotNull();
+            assertThat(result.getContent()).hasSize(1);
+
+            final ProductResponse dto = result.getContent().get(0);
+            assertThat(dto.id()).isEqualTo(1L);
+            assertThat(dto.name()).isEqualTo("Gạo ST25 5kg");
+            assertThat(dto.inventoryCount()).isEqualTo(95); // 100 - 5 reserved
+
+            // Cache must be populated
+            verify(valueOps).set(eq(cacheKey), anyString(), any());
+        }
+
+        @Test
+        @DisplayName("Redis error on read — falls back to DB gracefully")
+        void findAll_redisReadError_fallsBackToDb() {
+            // Arrange
+            final Page<Product> dbPage = new PageImpl<>(
+                    List.of(activeProduct), PageRequest.of(0, 20), 1L);
+
+            when(valueOps.get(anyString())).thenThrow(new RuntimeException("Redis connection refused"));
+            when(productRepository.findActiveProducts(isNull(), isNull(), any()))
+                    .thenReturn(dbPage);
+
+            // Act — must NOT throw
+            final Page<ProductResponse> result = productService.findAll(0, 20, null, null);
+
+            // Assert
+            assertThat(result).isNotNull();
+            assertThat(result.getContent()).hasSize(1);
+        }
+
+        @Test
+        @DisplayName("DB returns empty page — returns empty page (no exception)")
+        void findAll_emptyResult_returnsEmptyPage() {
+            // Arrange
+            final Page<Product> emptyPage = Page.empty(PageRequest.of(0, 20));
+
+            when(valueOps.get(anyString())).thenReturn(null);
+            when(productRepository.findActiveProducts(isNull(), isNull(), any()))
+                    .thenReturn(emptyPage);
+
+            // Act
+            final Page<ProductResponse> result = productService.findAll(0, 20, null, null);
+
+            // Assert
+            assertThat(result.getContent()).isEmpty();
+            assertThat(result.getTotalElements()).isZero();
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // findById
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Nested
+    @DisplayName("findById — Product Detail")
+    class FindById {
+
+        @Test
+        @DisplayName("Cache HIT — returns cached product without touching DB")
+        void findById_cacheHit_returnsFromCache() throws Exception {
+            // Arrange
+            final String cacheKey = CacheKeys.productDetail(1L);
+            final String cachedJson = objectMapper.writeValueAsString(productResponse);
+
+            when(valueOps.get(cacheKey)).thenReturn(cachedJson);
+
+            // Act
+            final ProductResponse result = productService.findById(1L);
+
+            // Assert
+            assertThat(result).isNotNull();
+            assertThat(result.id()).isEqualTo(1L);
+            assertThat(result.name()).isEqualTo("Gạo ST25 5kg");
+
+            verifyNoInteractions(productRepository);
+        }
+
+        @Test
+        @DisplayName("Cache MISS + product found — queries DB, maps, writes cache")
+        void findById_cacheMiss_productFound_mapsAndCaches() {
+            // Arrange
+            final String cacheKey = CacheKeys.productDetail(1L);
+
+            when(valueOps.get(cacheKey)).thenReturn(null);
+            when(productRepository.findActiveById(1L)).thenReturn(Optional.of(activeProduct));
+
+            // Act
+            final ProductResponse result = productService.findById(1L);
+
+            // Assert
+            assertThat(result).isNotNull();
+            assertThat(result.id()).isEqualTo(1L);
+            assertThat(result.categoryName()).isEqualTo("Thực phẩm");
+            assertThat(result.inventoryCount()).isEqualTo(95);
+            assertThat(result.status()).isEqualTo("ACTIVE");
+
+            // Cache must be written
+            verify(valueOps).set(eq(cacheKey), anyString(), any());
+        }
+
+        @Test
+        @DisplayName("Cache MISS + product NOT found — throws ResourceNotFoundException (HTTP 404)")
+        void findById_cacheMiss_productNotFound_throws404() {
+            // Arrange
+            when(valueOps.get(anyString())).thenReturn(null);
+            when(productRepository.findActiveById(9999L)).thenReturn(Optional.empty());
+
+            // Act + Assert
+            assertThatThrownBy(() -> productService.findById(9999L))
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .hasMessageContaining("9999");
+
+            // Cache must NOT be written
+            verify(valueOps, never()).set(anyString(), anyString(), any());
+        }
+
+        @Test
+        @DisplayName("Redis down on read — falls back to DB gracefully")
+        void findById_redisReadError_fallsBackToDb() {
+            // Arrange
+            when(valueOps.get(anyString())).thenThrow(new RuntimeException("Redis timeout"));
+            when(productRepository.findActiveById(1L)).thenReturn(Optional.of(activeProduct));
+
+            // Act — must NOT throw
+            final ProductResponse result = productService.findById(1L);
+
+            // Assert
+            assertThat(result).isNotNull();
+            assertThat(result.id()).isEqualTo(1L);
+        }
+
+        @Test
+        @DisplayName("Inventory is null — inventoryCount defaults to 0")
+        void findById_inventoryNull_inventoryCountIsZero() {
+            // Arrange — product without linked inventory (edge case)
+            final Product productWithoutInventory = Product.builder()
+                    .productId(2L)
+                    .productSlug("TEST-NULL-INV")
+                    .productName("No Inventory Product")
+                    .price(new BigDecimal("50000"))
+                    .status(Product.ProductStatus.ACTIVE)
+                    .category(activeProduct.getCategory())
+                    .inventory(null)
+                    .build();
+
+            when(valueOps.get(anyString())).thenReturn(null);
+            when(productRepository.findActiveById(2L)).thenReturn(Optional.of(productWithoutInventory));
+
+            // Act
+            final ProductResponse result = productService.findById(2L);
+
+            // Assert
+            assertThat(result.inventoryCount()).isZero();
+        }
+    }
+}
