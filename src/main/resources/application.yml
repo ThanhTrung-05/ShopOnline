@@ -1,0 +1,22 @@
+spring:
+  application:
+    name: banhangtructuyen
+  jackson:
+    time-zone: Asia/Ho_Chi_Minh
+  jpa:
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+
+app:
+  redis:
+    ttl:
+      product-list: 300
+      product-detail: 600
+
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html

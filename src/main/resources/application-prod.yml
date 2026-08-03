@@ -1,0 +1,15 @@
+spring:
+  datasource:
+    url: ${ORACLE_URL}
+    username: ${ORACLE_USER}
+    password: ${ORACLE_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.OracleDialect
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
