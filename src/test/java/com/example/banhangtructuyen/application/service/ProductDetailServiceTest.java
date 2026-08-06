@@ -121,6 +121,49 @@ class ProductDetailServiceTest {
     }
 
     @Test
+    void findDetailById_CacheMiss_CalculatesVatCorrectly_TenPercent() throws Exception {
+        Category category = new Category();
+        category.setCategoryId(2L);
+        category.setCategoryName("Đồ uống");
+        category.setVatRate(new BigDecimal("10.00")); // 10% VAT
+
+        Inventory inventory = new Inventory();
+        inventory.setQuantity(50);
+        inventory.setReservedQuantity(0);
+
+        Product product = new Product();
+        product.setProductId(2L);
+        product.setProductName("Nuoc suoi Lavie 500ml");
+        product.setProductSlug("nuoc-suoi-lavie-500ml");
+        product.setPrice(new BigDecimal("5000"));
+        product.setCategory(category);
+        product.setInventory(inventory);
+        product.setStatus(Product.ProductStatus.ACTIVE);
+
+        String cacheKey = CacheKeys.productDetail(2L) + ":detail";
+
+        AppProperties.Redis redisProps = new AppProperties.Redis();
+        AppProperties.Ttl ttl = new AppProperties.Ttl();
+        ttl.setProductDetail(600);
+        redisProps.setTtl(ttl);
+        when(appProperties.getRedis()).thenReturn(redisProps);
+
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get(cacheKey)).thenReturn(null);
+        when(productRepository.findActiveById(2L)).thenReturn(Optional.of(product));
+        when(objectMapper.writeValueAsString(any(ProductDetailResponse.class))).thenReturn("{}");
+
+        ProductDetailResponse result = productService.findDetailById(2L);
+
+        assertNotNull(result);
+        assertEquals(new BigDecimal("5000"), result.price());
+        assertEquals(new BigDecimal("10.00"), result.vatRate());
+        assertEquals(new BigDecimal("500"), result.vatAmount());
+        assertEquals(new BigDecimal("5500"), result.priceIncludingVat());
+        assertEquals(50, result.inventoryCount());
+    }
+
+    @Test
     void findDetailById_NotFound_ThrowsException() {
         String cacheKey = CacheKeys.productDetail(99L) + ":detail";
         

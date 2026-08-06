@@ -1,3 +1,5 @@
+
+
 package com.example.banhangtructuyen.domain.model;
 
 import jakarta.persistence.*;
@@ -28,7 +30,7 @@ public class Category {
     @Column(name = "CATEGORY_CODE", nullable = false, unique = true, length = 50)
     private String categoryCode;
 
-    @Column(name = "CATEGORY_NAME", nullable = false, length = 100)
+    @Column(name = "CATEGORY_NAME", nullable = false, unique = true, length = 100)
     private String categoryName;
 
     @Column(name = "DESCRIPTION", length = 500)

@@ -16,10 +16,10 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             JOIN FETCH p.category c
             JOIN FETCH p.inventory i
             WHERE p.status = 'ACTIVE'
-              AND (:categoryCode IS NULL OR c.categoryCode = :categoryCode)
+              AND (:categoryId IS NULL OR c.categoryId = :categoryId)
               AND (:search IS NULL OR UPPER(p.productName) LIKE UPPER(CONCAT('%', :search, '%')))
             """)
-    Page<Product> findActiveProducts(@Param("categoryCode") String categoryCode,
+    Page<Product> findActiveProducts(@Param("categoryId") Long categoryId,
                                      @Param("search") String search,
                                      Pageable pageable);
 
@@ -50,4 +50,10 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             WHERE p.productId = :id
             """)
     Optional<Product> findByIdWithInventory(@Param("id") Long id);
+
+    boolean existsByCategory_CategoryId(Long categoryId);
+
+    boolean existsByProductSlug(String productSlug);
+
+    boolean existsByProductSlugAndProductIdNot(String productSlug, Long productId);
 }

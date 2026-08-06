@@ -6,9 +6,9 @@ public final class CacheKeys {
     }
 
     public static String productList(final int page, final int size,
-                                      final String categoryCode, final String search) {
+                                      final Long categoryId, final String search) {
         return "product:list:" + page + ":" + size
-                + ":" + (categoryCode == null ? "" : categoryCode)
+                + ":" + (categoryId == null ? "" : categoryId)
                 + ":" + (search == null ? "" : search);
     }
 

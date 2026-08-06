@@ -1,11 +1,17 @@
 package com.example.banhangtructuyen.application.service.impl;
 
 import com.example.banhangtructuyen.application.dto.product.ProductDetailResponse;
+import com.example.banhangtructuyen.application.dto.product.ProductRequest;
 import com.example.banhangtructuyen.application.dto.product.ProductResponse;
 import com.example.banhangtructuyen.application.service.ProductService;
 import com.example.banhangtructuyen.config.AppProperties;
+import com.example.banhangtructuyen.domain.exception.DuplicateResourceException;
 import com.example.banhangtructuyen.domain.exception.ResourceNotFoundException;
+import com.example.banhangtructuyen.domain.model.Category;
+import com.example.banhangtructuyen.domain.model.Inventory;
 import com.example.banhangtructuyen.domain.model.Product;
+import com.example.banhangtructuyen.domain.repository.CategoryRepository;
+import com.example.banhangtructuyen.domain.repository.InventoryRepository;
 import com.example.banhangtructuyen.domain.repository.ProductRepository;
 import com.example.banhangtructuyen.infrastructure.cache.CacheKeys;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -25,6 +31,7 @@ import java.math.RoundingMode;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -33,14 +40,16 @@ import java.util.Map;
 public class ProductServiceImpl implements ProductService {
 
     private final ProductRepository productRepository;
+    private final CategoryRepository categoryRepository;
+    private final InventoryRepository inventoryRepository;
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
     private final AppProperties appProperties;
 
     @Override
     public Page<ProductResponse> findAll(final int page, final int size,
-                                         final String categoryCode, final String search) {
-        final String cacheKey = CacheKeys.productList(page, size, categoryCode, search);
+                                         final Long categoryId, final String search) {
+        final String cacheKey = CacheKeys.productList(page, size, categoryId, search);
         final int ttl = appProperties.getRedis().getTtl().getProductList();
 
         // Cache-Aside: try cache first
@@ -63,7 +72,7 @@ public class ProductServiceImpl implements ProductService {
         log.debug("Cache MISS: {}", cacheKey);
         final Pageable pageable = PageRequest.of(page, size);
         final Page<Product> productPage = productRepository
-                .findActiveProducts(categoryCode, search, pageable);
+                .findActiveProducts(categoryId, search, pageable);
         final Page<ProductResponse> result = productPage.map(this::toResponse);
 
         // Populate cache
@@ -142,11 +151,100 @@ public class ProductServiceImpl implements ProductService {
         return response;
     }
 
+    @Override
+    @Transactional
+    public ProductDetailResponse create(final ProductRequest request) {
+        final Category category = getCategoryOrThrow(request.categoryId());
+
+        if (productRepository.existsByProductSlug(request.productSlug())) {
+            throw new DuplicateResourceException(
+                    "Product slug already exists: " + request.productSlug());
+        }
+
+        final Product product = Product.builder()
+                .productSlug(request.productSlug())
+                .category(category)
+                .productName(request.productName())
+                .description(request.description())
+                .price(request.price())
+                .imageUrl(request.imageUrl())
+                .status(Product.ProductStatus.valueOf(request.status()))
+                .build();
+        final Product saved = productRepository.save(product);
+
+        final Inventory inventory = Inventory.builder()
+                .product(saved)
+                .quantity(request.initialQuantity())
+                .reservedQuantity(0)
+                .build();
+        inventoryRepository.save(inventory);
+        saved.setInventory(inventory);
+
+        evictListCache();
+        return toDetailResponse(saved);
+    }
+
+    @Override
+    @Transactional
+    public ProductDetailResponse update(final Long productId, final ProductRequest request) {
+        final Category category = getCategoryOrThrow(request.categoryId());
+        final Product product = productRepository.findByIdWithInventory(productId)
+                .orElseThrow(() -> new ResourceNotFoundException("Product", productId));
+
+        if (productRepository.existsByProductSlugAndProductIdNot(request.productSlug(), productId)) {
+            throw new DuplicateResourceException(
+                    "Product slug already exists: " + request.productSlug());
+        }
+
+        product.setProductSlug(request.productSlug());
+        product.setCategory(category);
+        product.setProductName(request.productName());
+        product.setDescription(request.description());
+        product.setPrice(request.price());
+        product.setImageUrl(request.imageUrl());
+        product.setStatus(Product.ProductStatus.valueOf(request.status()));
+
+        if (product.getInventory() != null) {
+            product.getInventory().setQuantity(request.initialQuantity());
+        }
+
+        final Product saved = productRepository.save(product);
+        evictCache(productId);
+        evictListCache();
+        return toDetailResponse(saved);
+    }
+
+    @Override
+    @Transactional
+    public void delete(final Long productId) {
+        final Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new ResourceNotFoundException("Product", productId));
+
+        product.setStatus(Product.ProductStatus.DELETED);
+        productRepository.save(product);
+
+        evictCache(productId);
+        evictListCache();
+    }
+
+    private Category getCategoryOrThrow(final Long categoryId) {
+        return categoryRepository.findById(categoryId)
+                .orElseThrow(() -> new ResourceNotFoundException("Category", categoryId));
+    }
+
     /** Evict product cache after updates. */
     public void evictCache(final Long productId) {
         redisTemplate.delete(CacheKeys.productDetail(productId));
         redisTemplate.delete(CacheKeys.productDetail(productId) + ":detail");
         log.debug("Product cache evicted: productId={}", productId);
+    }
+
+    /** Evict all cached product list pages after a product is created/updated/deleted. */
+    private void evictListCache() {
+        final Set<String> keys = redisTemplate.keys("product:list:*");
+        if (keys != null && !keys.isEmpty()) {
+            redisTemplate.delete(keys);
+        }
     }
 
     /** Maps Product entity to lightweight ProductResponse (used by product list ATS-2). */

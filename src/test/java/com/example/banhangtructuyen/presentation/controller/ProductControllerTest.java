@@ -1,9 +1,12 @@
 package com.example.banhangtructuyen.presentation.controller;
 
 import com.example.banhangtructuyen.application.dto.product.ProductDetailResponse;
+import com.example.banhangtructuyen.application.dto.product.ProductRequest;
 import com.example.banhangtructuyen.application.dto.product.ProductResponse;
 import com.example.banhangtructuyen.application.service.ProductService;
+import com.example.banhangtructuyen.domain.exception.DuplicateResourceException;
 import com.example.banhangtructuyen.domain.exception.ResourceNotFoundException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -21,10 +24,12 @@ import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.List;
 
-import static org.hamcrest.Matchers.*;
-import static org.mockito.ArgumentMatchers.*;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.hasSize;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
@@ -95,15 +100,15 @@ class ProductControllerTest {
         }
 
         @Test
-        @DisplayName("200 — filtered by category code")
+        @DisplayName("200 — filtered by category ID")
         void listProducts_shouldReturn200_withCategoryFilter() throws Exception {
             // Arrange
-            when(productService.findAll(0, 20, "THUC_PHAM", null))
+            when(productService.findAll(0, 20, 1L, null))
                     .thenReturn(singleProductPage(sampleProduct()));
 
             // Act + Assert
             mockMvc.perform(get("/api/v1/products")
-                            .param("category", "THUC_PHAM"))
+                            .param("categoryId", "1"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data.content[0].categoryName").value("Thực phẩm"));
@@ -130,12 +135,12 @@ class ProductControllerTest {
             // Arrange
             final Page<ProductResponse> emptyPage = new PageImpl<>(
                     Collections.emptyList(), PageRequest.of(0, 20), 0L);
-            when(productService.findAll(0, 20, "DIEN_MAY", "nonexistent"))
+            when(productService.findAll(0, 20, 2L, "nonexistent"))
                     .thenReturn(emptyPage);
 
             // Act + Assert
             mockMvc.perform(get("/api/v1/products")
-                            .param("category", "DIEN_MAY")
+                            .param("categoryId", "2")
                             .param("search", "nonexistent"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
@@ -232,6 +237,200 @@ class ProductControllerTest {
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.success").value(false))
                     .andExpect(jsonPath("$.message").value(containsString("9999")));
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // POST /api/v1/products
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Nested
+    @DisplayName("POST /api/v1/products — Create Product")
+    class CreateProduct {
+
+        @Autowired
+        private ObjectMapper objectMapper;
+
+        private ProductDetailResponse sampleProductDetail() {
+            return new ProductDetailResponse(
+                    1L, "Gạo ST25 5kg", "TP001",
+                    new BigDecimal("180000"), new BigDecimal("5.00"), new BigDecimal("9000"), new BigDecimal("189000"),
+                    null, "desc", 1L, "Thực phẩm", 100, "ACTIVE"
+            );
+        }
+
+        private ProductRequest sampleRequest() {
+            return new ProductRequest("Gạo ST25 5kg", "TP001", 1L, "desc",
+                    new BigDecimal("180000"), null, "ACTIVE", 100);
+        }
+
+        @Test
+        @DisplayName("200 — created successfully")
+        void createProduct_valid_returns200() throws Exception {
+            when(productService.create(any(ProductRequest.class))).thenReturn(sampleProductDetail());
+
+            mockMvc.perform(post("/api/v1/products")
+                            .contentType("application/json")
+                            .content(objectMapper.writeValueAsString(sampleRequest())))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.name").value("Gạo ST25 5kg"))
+                    .andExpect(jsonPath("$.data.categoryId").value(1));
+        }
+
+        @Test
+        @DisplayName("409 — duplicate product slug")
+        void createProduct_duplicateSlug_returns409() throws Exception {
+            when(productService.create(any(ProductRequest.class)))
+                    .thenThrow(new DuplicateResourceException("Product slug already exists: TP001"));
+
+            mockMvc.perform(post("/api/v1/products")
+                            .contentType("application/json")
+                            .content(objectMapper.writeValueAsString(sampleRequest())))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.success").value(false));
+        }
+
+        @Test
+        @DisplayName("404 — category does not exist")
+        void createProduct_categoryNotFound_returns404() throws Exception {
+            when(productService.create(any(ProductRequest.class)))
+                    .thenThrow(new ResourceNotFoundException("Category", 99L));
+
+            final String body = objectMapper.writeValueAsString(
+                    new ProductRequest("Gạo ST25 5kg", "TP001", 99L, "desc",
+                            new BigDecimal("180000"), null, "ACTIVE", 100));
+
+            mockMvc.perform(post("/api/v1/products")
+                            .contentType("application/json")
+                            .content(body))
+                    .andExpect(status().isNotFound());
+        }
+
+        @Test
+        @DisplayName("400 — blank product name rejected")
+        void createProduct_blankName_returns400() throws Exception {
+            final String body = objectMapper.writeValueAsString(
+                    new ProductRequest("", "TP001", 1L, "desc",
+                            new BigDecimal("180000"), null, "ACTIVE", 100));
+
+            mockMvc.perform(post("/api/v1/products")
+                            .contentType("application/json")
+                            .content(body))
+                    .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        @DisplayName("400 — negative price rejected")
+        void createProduct_negativePrice_returns400() throws Exception {
+            final String body = objectMapper.writeValueAsString(
+                    new ProductRequest("Gạo ST25 5kg", "TP001", 1L, "desc",
+                            new BigDecimal("-1"), null, "ACTIVE", 100));
+
+            mockMvc.perform(post("/api/v1/products")
+                            .contentType("application/json")
+                            .content(body))
+                    .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        @DisplayName("400 — negative inventory quantity rejected")
+        void createProduct_negativeInventory_returns400() throws Exception {
+            final String body = objectMapper.writeValueAsString(
+                    new ProductRequest("Gạo ST25 5kg", "TP001", 1L, "desc",
+                            new BigDecimal("180000"), null, "ACTIVE", -5));
+
+            mockMvc.perform(post("/api/v1/products")
+                            .contentType("application/json")
+                            .content(body))
+                    .andExpect(status().isBadRequest());
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // PUT /api/v1/products/{id}
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Nested
+    @DisplayName("PUT /api/v1/products/{id} — Update Product")
+    class UpdateProduct {
+
+        @Autowired
+        private ObjectMapper objectMapper;
+
+        private ProductDetailResponse sampleProductDetail() {
+            return new ProductDetailResponse(
+                    1L, "Gạo ST25 5kg mới", "TP001",
+                    new BigDecimal("190000"), new BigDecimal("5.00"), new BigDecimal("9500"), new BigDecimal("199500"),
+                    null, "desc", 1L, "Thực phẩm", 80, "ACTIVE"
+            );
+        }
+
+        private ProductRequest sampleRequest() {
+            return new ProductRequest("Gạo ST25 5kg mới", "TP001", 1L, "desc",
+                    new BigDecimal("190000"), null, "ACTIVE", 80);
+        }
+
+        @Test
+        @DisplayName("200 — updated successfully")
+        void updateProduct_valid_returns200() throws Exception {
+            when(productService.update(eq(1L), any(ProductRequest.class))).thenReturn(sampleProductDetail());
+
+            mockMvc.perform(put("/api/v1/products/1")
+                            .contentType("application/json")
+                            .content(objectMapper.writeValueAsString(sampleRequest())))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.name").value("Gạo ST25 5kg mới"));
+        }
+
+        @Test
+        @DisplayName("404 — product not found")
+        void updateProduct_notFound_returns404() throws Exception {
+            when(productService.update(eq(99L), any(ProductRequest.class)))
+                    .thenThrow(new ResourceNotFoundException("Product", 99L));
+
+            mockMvc.perform(put("/api/v1/products/99")
+                            .contentType("application/json")
+                            .content(objectMapper.writeValueAsString(sampleRequest())))
+                    .andExpect(status().isNotFound());
+        }
+
+        @Test
+        @DisplayName("409 — duplicate slug against another product")
+        void updateProduct_duplicateSlug_returns409() throws Exception {
+            when(productService.update(eq(1L), any(ProductRequest.class)))
+                    .thenThrow(new DuplicateResourceException("Product slug already exists: TP001"));
+
+            mockMvc.perform(put("/api/v1/products/1")
+                            .contentType("application/json")
+                            .content(objectMapper.writeValueAsString(sampleRequest())))
+                    .andExpect(status().isConflict());
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // DELETE /api/v1/products/{id}
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Nested
+    @DisplayName("DELETE /api/v1/products/{id} — Delete Product")
+    class DeleteProduct {
+
+        @Test
+        @DisplayName("200 — soft-deleted successfully")
+        void deleteProduct_existing_returns200() throws Exception {
+            mockMvc.perform(delete("/api/v1/products/1"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.success").value(true));
+        }
+
+        @Test
+        @DisplayName("404 — product not found")
+        void deleteProduct_notFound_returns404() throws Exception {
+            org.mockito.Mockito.doThrow(new ResourceNotFoundException("Product", 99L))
+                    .when(productService).delete(99L);
+
+            mockMvc.perform(delete("/api/v1/products/99"))
+                    .andExpect(status().isNotFound());
         }
     }
 }

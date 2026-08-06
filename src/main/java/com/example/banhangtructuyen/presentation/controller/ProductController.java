@@ -2,6 +2,7 @@ package com.example.banhangtructuyen.presentation.controller;
 
 import com.example.banhangtructuyen.application.dto.ApiResponse;
 import com.example.banhangtructuyen.application.dto.product.ProductDetailResponse;
+import com.example.banhangtructuyen.application.dto.product.ProductRequest;
 import com.example.banhangtructuyen.application.dto.product.ProductResponse;
 import com.example.banhangtructuyen.application.service.ProductService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -10,6 +11,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
@@ -47,7 +49,7 @@ public class ProductController {
     @Operation(
         summary = "List products",
         description = "Returns a paginated list of active products. "
-                    + "Supports optional filtering by category code and keyword search. "
+                    + "Supports optional filtering by category ID and keyword search. "
                     + "Results are cached in Redis with a 5-minute TTL (Cache-Aside pattern)."
     )
     @ApiResponses({
@@ -65,13 +67,13 @@ public class ProductController {
             @RequestParam(defaultValue = "20") @Min(value = 1, message = "Page size must be at least 1")
                                                @Max(value = 100, message = "Page size must not exceed 100") int size,
 
-            @Parameter(description = "Filter by category code (e.g. THUC_PHAM, DIEN_MAY, SANH_SU)", example = "THUC_PHAM")
-            @RequestParam(required = false) String category,
+            @Parameter(description = "Filter by category ID", example = "1")
+            @RequestParam(required = false) @Min(value = 1, message = "Category ID must be at least 1") Long categoryId,
 
             @Parameter(description = "Keyword to search in product name (case-insensitive)", example = "gạo")
             @RequestParam(required = false) @Size(max = 100, message = "Search keyword must not exceed 100 characters") String search) {
 
-        final Page<ProductResponse> result = productService.findAll(page, size, category, search);
+        final Page<ProductResponse> result = productService.findAll(page, size, categoryId, search);
         return ResponseEntity.ok(com.example.banhangtructuyen.application.dto.ApiResponse.success(result));
     }
 
@@ -100,5 +102,52 @@ public class ProductController {
             @PathVariable @Min(value = 1, message = "Product ID must be at least 1") Long id) {
         return ResponseEntity.ok(com.example.banhangtructuyen.application.dto.ApiResponse.success(
                 productService.findDetailById(id)));
+    }
+
+    @Operation(summary = "Create product",
+            description = "Creates a new product together with its linked inventory row. "
+                        + "Product slug must be unique and category must exist. (ATS-6, admin)")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Product created successfully"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed (invalid VAT rate, price, inventory, etc.)"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Category not found"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Product slug already exists")
+    })
+    @PostMapping
+    public ResponseEntity<com.example.banhangtructuyen.application.dto.ApiResponse<ProductDetailResponse>> createProduct(
+            @Valid @RequestBody final ProductRequest request) {
+        return ResponseEntity.ok(com.example.banhangtructuyen.application.dto.ApiResponse.success(
+                productService.create(request)));
+    }
+
+    @Operation(summary = "Update product",
+            description = "Updates an existing product by ID, including category, VAT-affecting fields, and inventory quantity. (ATS-6, admin)")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Product updated successfully"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Product or category not found"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Product slug already exists")
+    })
+    @PutMapping("/{id}")
+    public ResponseEntity<com.example.banhangtructuyen.application.dto.ApiResponse<ProductDetailResponse>> updateProduct(
+            @Parameter(description = "Product ID", example = "1")
+            @PathVariable @Min(value = 1, message = "Product ID must be at least 1") Long id,
+            @Valid @RequestBody final ProductRequest request) {
+        return ResponseEntity.ok(com.example.banhangtructuyen.application.dto.ApiResponse.success(
+                productService.update(id, request)));
+    }
+
+    @Operation(summary = "Delete product",
+            description = "Soft-deletes a product by setting its status to DELETED. (ATS-6, admin)")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Product deleted successfully"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Product not found")
+    })
+    @DeleteMapping("/{id}")
+    public ResponseEntity<com.example.banhangtructuyen.application.dto.ApiResponse<Void>> deleteProduct(
+            @Parameter(description = "Product ID", example = "1")
+            @PathVariable @Min(value = 1, message = "Product ID must be at least 1") Long id) {
+        productService.delete(id);
+        return ResponseEntity.ok(com.example.banhangtructuyen.application.dto.ApiResponse.success(null));
     }
 }

@@ -1,12 +1,17 @@
 package com.example.banhangtructuyen.application.service;
 
+import com.example.banhangtructuyen.application.dto.product.ProductDetailResponse;
+import com.example.banhangtructuyen.application.dto.product.ProductRequest;
 import com.example.banhangtructuyen.application.dto.product.ProductResponse;
 import com.example.banhangtructuyen.application.service.impl.ProductServiceImpl;
 import com.example.banhangtructuyen.config.AppProperties;
+import com.example.banhangtructuyen.domain.exception.DuplicateResourceException;
 import com.example.banhangtructuyen.domain.exception.ResourceNotFoundException;
 import com.example.banhangtructuyen.domain.model.Category;
 import com.example.banhangtructuyen.domain.model.Inventory;
 import com.example.banhangtructuyen.domain.model.Product;
+import com.example.banhangtructuyen.domain.repository.CategoryRepository;
+import com.example.banhangtructuyen.domain.repository.InventoryRepository;
 import com.example.banhangtructuyen.domain.repository.ProductRepository;
 import com.example.banhangtructuyen.infrastructure.cache.CacheKeys;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -29,6 +34,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -55,6 +61,8 @@ class ProductServiceTest {
     // ── Mocks ──────────────────────────────────────────────────────────────
 
     @Mock private ProductRepository       productRepository;
+    @Mock private CategoryRepository      categoryRepository;
+    @Mock private InventoryRepository     inventoryRepository;
     @Mock private StringRedisTemplate     redisTemplate;
     @Mock private ValueOperations<String, String> valueOps;
 
@@ -78,7 +86,8 @@ class ProductServiceTest {
         appProperties = new AppProperties();
 
         // Inject via constructor manually (Mockito @InjectMocks cannot inject final field)
-        productService = new ProductServiceImpl(productRepository, redisTemplate, objectMapper, appProperties);
+        productService = new ProductServiceImpl(productRepository, categoryRepository, inventoryRepository,
+                redisTemplate, objectMapper, appProperties);
 
         // Build a minimal ACTIVE product fixture
         final Category category = Category.builder()
@@ -111,7 +120,156 @@ class ProductServiceTest {
         );
 
         // Wire valueOps once for all tests that need it
-        when(redisTemplate.opsForValue()).thenReturn(valueOps);
+        lenient().when(redisTemplate.opsForValue()).thenReturn(valueOps);
+    }
+
+    private ProductRequest validRequest() {
+        return new ProductRequest("Gạo ST25 5kg", "TP001", 1L, "desc",
+                new BigDecimal("180000"), null, "ACTIVE", 100);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // create
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Nested
+    @DisplayName("create — Product")
+    class Create {
+
+        @Test
+        @DisplayName("Valid request — creates product and linked inventory")
+        void create_valid_succeeds() {
+            final Category category = activeProduct.getCategory();
+            when(categoryRepository.findById(1L)).thenReturn(Optional.of(category));
+            when(productRepository.existsByProductSlug("TP001")).thenReturn(false);
+            when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(inventoryRepository.save(any(Inventory.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            final ProductDetailResponse result = productService.create(validRequest());
+
+            assertThat(result.name()).isEqualTo("Gạo ST25 5kg");
+            assertThat(result.categoryId()).isEqualTo(1L);
+            verify(productRepository).save(any(Product.class));
+            verify(inventoryRepository).save(any(Inventory.class));
+        }
+
+        @Test
+        @DisplayName("Category not found — throws ResourceNotFoundException")
+        void create_categoryNotFound_throws404() {
+            when(categoryRepository.findById(99L)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> productService.create(new ProductRequest(
+                    "Gạo ST25 5kg", "TP001", 99L, "desc",
+                    new BigDecimal("180000"), null, "ACTIVE", 100)))
+                    .isInstanceOf(ResourceNotFoundException.class);
+
+            verify(productRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("Duplicate product slug — throws DuplicateResourceException")
+        void create_duplicateSlug_throws409() {
+            final Category category = activeProduct.getCategory();
+            when(categoryRepository.findById(1L)).thenReturn(Optional.of(category));
+            when(productRepository.existsByProductSlug("TP001")).thenReturn(true);
+
+            assertThatThrownBy(() -> productService.create(validRequest()))
+                    .isInstanceOf(DuplicateResourceException.class)
+                    .hasMessageContaining("TP001");
+
+            verify(productRepository, never()).save(any());
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // update
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Nested
+    @DisplayName("update — Product")
+    class Update {
+
+        @Test
+        @DisplayName("Valid update — succeeds")
+        void update_valid_succeeds() {
+            final Category category = activeProduct.getCategory();
+            when(categoryRepository.findById(1L)).thenReturn(Optional.of(category));
+            when(productRepository.findByIdWithInventory(1L)).thenReturn(Optional.of(activeProduct));
+            when(productRepository.existsByProductSlugAndProductIdNot("TP001", 1L)).thenReturn(false);
+            when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            final ProductDetailResponse result = productService.update(1L, validRequest());
+
+            assertThat(result.name()).isEqualTo("Gạo ST25 5kg");
+            verify(productRepository).save(any(Product.class));
+        }
+
+        @Test
+        @DisplayName("Product not found — throws ResourceNotFoundException")
+        void update_notFound_throws404() {
+            when(categoryRepository.findById(1L)).thenReturn(Optional.of(activeProduct.getCategory()));
+            when(productRepository.findByIdWithInventory(99L)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> productService.update(99L, validRequest()))
+                    .isInstanceOf(ResourceNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("Category not found — throws ResourceNotFoundException")
+        void update_categoryNotFound_throws404() {
+            when(categoryRepository.findById(1L)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> productService.update(1L, validRequest()))
+                    .isInstanceOf(ResourceNotFoundException.class);
+
+            verify(productRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("Duplicate slug against another product — throws DuplicateResourceException")
+        void update_duplicateSlug_throws409() {
+            final Category category = activeProduct.getCategory();
+            when(categoryRepository.findById(1L)).thenReturn(Optional.of(category));
+            when(productRepository.findByIdWithInventory(1L)).thenReturn(Optional.of(activeProduct));
+            when(productRepository.existsByProductSlugAndProductIdNot("TP001", 1L)).thenReturn(true);
+
+            assertThatThrownBy(() -> productService.update(1L, validRequest()))
+                    .isInstanceOf(DuplicateResourceException.class);
+
+            verify(productRepository, never()).save(any());
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // delete
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Nested
+    @DisplayName("delete — Product")
+    class Delete {
+
+        @Test
+        @DisplayName("Existing product — soft-deletes by flipping status to DELETED")
+        void delete_existing_softDeletes() {
+            when(productRepository.findById(1L)).thenReturn(Optional.of(activeProduct));
+            when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            productService.delete(1L);
+
+            assertThat(activeProduct.getStatus()).isEqualTo(Product.ProductStatus.DELETED);
+            verify(productRepository).save(activeProduct);
+        }
+
+        @Test
+        @DisplayName("Product not found — throws ResourceNotFoundException")
+        void delete_notFound_throws404() {
+            when(productRepository.findById(99L)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> productService.delete(99L))
+                    .isInstanceOf(ResourceNotFoundException.class);
+
+            verify(productRepository, never()).save(any());
+        }
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -149,16 +307,16 @@ class ProductServiceTest {
         @DisplayName("Cache MISS — queries DB, maps results, writes cache")
         void findAll_cacheMiss_queriesDBAndWritesCache() {
             // Arrange
-            final String cacheKey = CacheKeys.productList(0, 20, "THUC_PHAM", null);
+            final String cacheKey = CacheKeys.productList(0, 20, 1L, null);
             final Page<Product> dbPage = new PageImpl<>(List.of(activeProduct),
                     PageRequest.of(0, 20), 1L);
 
             when(valueOps.get(cacheKey)).thenReturn(null);
-            when(productRepository.findActiveProducts(eq("THUC_PHAM"), isNull(), any()))
+            when(productRepository.findActiveProducts(eq(1L), isNull(), any()))
                     .thenReturn(dbPage);
 
             // Act
-            final Page<ProductResponse> result = productService.findAll(0, 20, "THUC_PHAM", null);
+            final Page<ProductResponse> result = productService.findAll(0, 20, 1L, null);
 
             // Assert
             assertThat(result).isNotNull();
