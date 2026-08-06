@@ -1,0 +1,121 @@
+{
+  "realm": "shoponline",
+  "enabled": true,
+  "sslRequired": "none",
+
+  "clients": [
+    {
+      "clientId": "shoponline-frontend",
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "http://localhost:3000/*",
+        "https://oauth.pstmn.io/v1/browser-callback"
+      ],
+      "webOrigins": ["http://localhost:3000"],
+      "defaultClientScopes": ["basic", "email", "profile", "roles", "web-origins", "acr", "shoponline-backend-audience"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "protocolMappers": [
+        {
+          "name": "shoponline-backend-client-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-client-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "usermodel.clientRoleMapping.clientId": "shoponline-backend",
+            "usermodel.clientRoleMapping.rolePrefix": "",
+            "multivalued": "true",
+            "claim.name": "resource_access.${client_id}.roles",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "shoponline-backend",
+      "publicClient": false,
+      "bearerOnly": true,
+      "protocol": "openid-connect"
+    },
+    {
+      "clientId": "shoponline-user-admin",
+      "publicClient": false,
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "secret": "${KEYCLOAK_USER_ADMIN_CLIENT_SECRET}"
+    }
+  ],
+
+  "clientScopes": [
+    {
+      "name": "shoponline-backend-audience",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "backend-audience-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "shoponline-backend",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+
+  "clientScopeMappings": {
+    "shoponline-backend": [
+      {
+        "client": "shoponline-frontend",
+        "roles": ["CUSTOMER", "WAREHOUSE_STAFF", "ADMIN"]
+      }
+    ]
+  },
+
+  "roles": {
+    "client": {
+      "shoponline-backend": [
+        { "name": "CUSTOMER" },
+        { "name": "WAREHOUSE_STAFF" },
+        { "name": "ADMIN" }
+      ]
+    }
+  },
+
+  "users": [
+    {
+      "username": "test-customer",
+      "enabled": true,
+      "clientRoles": { "shoponline-backend": ["CUSTOMER"] }
+    },
+    {
+      "username": "test-admin",
+      "enabled": true,
+      "clientRoles": { "shoponline-backend": ["ADMIN"] }
+    },
+    {
+      "username": "service-account-shoponline-user-admin",
+      "enabled": true,
+      "serviceAccountClientId": "shoponline-user-admin",
+      "clientRoles": {
+        "realm-management": ["manage-users", "view-users"]
+      }
+    }
+  ]
+}
