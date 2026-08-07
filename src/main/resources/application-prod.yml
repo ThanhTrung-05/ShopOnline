@@ -13,3 +13,10 @@ spring:
     redis:
       host: ${REDIS_HOST}
       port: ${REDIS_PORT}
+
+app:
+  security:
+    jwt:
+      jwk-set-uri: ${KEYCLOAK_JWK_SET_URI}
+      issuer: ${KEYCLOAK_ISSUER}
+      audience: ${KEYCLOAK_AUDIENCE:shoponline-backend}

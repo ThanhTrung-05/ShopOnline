@@ -14,6 +14,11 @@ app:
     ttl:
       product-list: 300
       product-detail: 600
+  security:
+    jwt:
+      jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://localhost:8081/realms/shoponline/protocol/openid-connect/certs}
+      issuer: ${KEYCLOAK_ISSUER:http://localhost:8081/realms/shoponline}
+      audience: ${KEYCLOAK_AUDIENCE:shoponline-backend}
 
 springdoc:
   api-docs:
