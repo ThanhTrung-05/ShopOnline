@@ -2,6 +2,16 @@
   "realm": "shoponline",
   "enabled": true,
   "sslRequired": "none",
+  "resetPasswordAllowed": true,
+  "smtpServer": {
+    "host": "mailpit",
+    "port": "1025",
+    "from": "no-reply@shoponline.local",
+    "fromDisplayName": "ShopOnline",
+    "auth": "false",
+    "ssl": "false",
+    "starttls": "false"
+  },
 
   "clients": [
     {

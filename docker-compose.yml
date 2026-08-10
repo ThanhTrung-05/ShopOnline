@@ -87,6 +87,20 @@ services:
       timeout: 5s
       retries: 5
 
+  # 5b. Mailpit (local SMTP test server for Keycloak emails)
+  mailpit:
+    image: axllent/mailpit:v1.20
+    container_name: bhtt-mailpit
+    ports:
+      - "8025:8025"
+    networks:
+      - bhtt-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8025/api/v1/info"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # 6. Keycloak (Identity Provider)
   keycloak:
     image: quay.io/keycloak/keycloak:26.7.0
