@@ -19,6 +19,8 @@ app:
       jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://localhost:8081/realms/shoponline/protocol/openid-connect/certs}
       issuer: ${KEYCLOAK_ISSUER:http://localhost:8081/realms/shoponline}
       audience: ${KEYCLOAK_AUDIENCE:shoponline-backend}
+    cors:
+      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
 
 springdoc:
   api-docs:

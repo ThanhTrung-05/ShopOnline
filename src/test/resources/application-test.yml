@@ -18,3 +18,5 @@ app:
       jwk-set-uri: http://localhost:8081/realms/shoponline/protocol/openid-connect/certs
       issuer: http://localhost:8081/realms/shoponline
       audience: shoponline-backend
+    cors:
+      allowed-origins: http://localhost:3000

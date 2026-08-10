@@ -4,6 +4,7 @@ import com.example.banhangtructuyen.config.security.AudienceValidator;
 import com.example.banhangtructuyen.presentation.security.RestAccessDeniedHandler;
 import com.example.banhangtructuyen.presentation.security.RestAuthenticationEntryPoint;
 import jakarta.servlet.DispatcherType;
+import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -17,6 +18,9 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.security.web.SecurityFilterChain;
 
 /**
@@ -37,14 +41,17 @@ public class SecurityConfig {
     private final String jwkSetUri;
     private final String issuer;
     private final String audience;
+    private final List<String> corsAllowedOrigins;
 
     public SecurityConfig(
             @Value("${app.security.jwt.jwk-set-uri}") final String jwkSetUri,
             @Value("${app.security.jwt.issuer}") final String issuer,
-            @Value("${app.security.jwt.audience}") final String audience) {
+            @Value("${app.security.jwt.audience}") final String audience,
+            @Value("${app.security.cors.allowed-origins}") final List<String> corsAllowedOrigins) {
         this.jwkSetUri = jwkSetUri;
         this.issuer = issuer;
         this.audience = audience;
+        this.corsAllowedOrigins = corsAllowedOrigins;
     }
 
     @Bean
@@ -58,13 +65,28 @@ public class SecurityConfig {
     }
 
     @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        final CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(corsAllowedOrigins);
+        configuration.setAllowedMethods(List.of("GET", "POST", "OPTIONS"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        configuration.setAllowCredentials(false);
+
+        final UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/api/**", configuration);
+        return source;
+    }
+
+    @Bean
     public SecurityFilterChain securityFilterChain(
             final HttpSecurity http,
             final JwtDecoder jwtDecoder,
+            final CorsConfigurationSource corsConfigurationSource,
             final RestAuthenticationEntryPoint authenticationEntryPoint,
             final RestAccessDeniedHandler accessDeniedHandler) throws Exception {
         http
             .csrf(csrf -> csrf.disable())
+            .cors(cors -> cors.configurationSource(corsConfigurationSource))
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()

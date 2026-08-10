@@ -17,7 +17,8 @@
       "webOrigins": ["http://localhost:3000"],
       "defaultClientScopes": ["basic", "email", "profile", "roles", "web-origins", "acr", "shoponline-backend-audience"],
       "attributes": {
-        "pkce.code.challenge.method": "S256"
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "+"
       },
       "protocolMappers": [
         {
