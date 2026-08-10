@@ -2,6 +2,7 @@ package com.example.banhangtructuyen.presentation.exception;
 
 import com.example.banhangtructuyen.application.dto.ApiResponse;
 import com.example.banhangtructuyen.domain.exception.EmailAlreadyExistsException;
+import com.example.banhangtructuyen.domain.exception.KeycloakProvisioningException;
 import com.example.banhangtructuyen.domain.exception.ResourceNotFoundException;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -24,6 +25,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleEmailAlreadyExists(final EmailAlreadyExistsException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    @ExceptionHandler(KeycloakProvisioningException.class)
+    public ResponseEntity<ApiResponse<Void>> handleKeycloakProvisioning(final KeycloakProvisioningException ex) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ApiResponse.error("Unable to complete registration. Please try again later."));
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)

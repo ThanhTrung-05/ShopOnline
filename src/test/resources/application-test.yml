@@ -20,3 +20,11 @@ app:
       audience: shoponline-backend
     cors:
       allowed-origins: http://localhost:3000
+  keycloak:
+    admin:
+      base-url: http://localhost:8081
+      realm: shoponline
+      client-id: shoponline-user-admin
+      client-secret: test-secret
+      backend-client-id: shoponline-backend
+      customer-role: CUSTOMER

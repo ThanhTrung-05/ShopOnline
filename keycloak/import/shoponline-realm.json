@@ -140,7 +140,7 @@
       "enabled": true,
       "serviceAccountClientId": "shoponline-user-admin",
       "clientRoles": {
-        "realm-management": ["manage-users", "view-users"]
+        "realm-management": ["manage-users", "view-users", "view-clients"]
       }
     }
   ]
