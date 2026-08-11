@@ -1,6 +1,7 @@
 package com.example.banhangtructuyen.config;
 
 import com.example.banhangtructuyen.config.security.AudienceValidator;
+import com.example.banhangtructuyen.config.security.KeycloakRoleConverter;
 import com.example.banhangtructuyen.presentation.security.RestAccessDeniedHandler;
 import com.example.banhangtructuyen.presentation.security.RestAuthenticationEntryPoint;
 import jakarta.servlet.DispatcherType;
@@ -18,6 +19,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -31,8 +33,9 @@ import org.springframework.security.web.SecurityFilterChain;
  * do not depend on Keycloak being reachable (JWKS is fetched lazily on first validation).
  *
  * <p>Token validation enforces timestamp (exp/nbf), issuer, and audience
- * ({@code shoponline-backend}). Keycloak role -> Spring authority mapping is intentionally
- * out of scope; a valid token yields an authenticated principal only.
+ * ({@code shoponline-backend}). Keycloak client roles from
+ * {@code resource_access.shoponline-backend.roles} are mapped to {@code ROLE_*} authorities
+ * via {@link KeycloakRoleConverter}.
  */
 @Configuration
 @EnableWebSecurity
@@ -65,6 +68,13 @@ public class SecurityConfig {
     }
 
     @Bean
+    public JwtAuthenticationConverter jwtAuthenticationConverter() {
+        final JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
+        converter.setJwtGrantedAuthoritiesConverter(new KeycloakRoleConverter(audience));
+        return converter;
+    }
+
+    @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         final CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(corsAllowedOrigins);
@@ -81,6 +91,7 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(
             final HttpSecurity http,
             final JwtDecoder jwtDecoder,
+            final JwtAuthenticationConverter jwtAuthenticationConverter,
             final CorsConfigurationSource corsConfigurationSource,
             final RestAuthenticationEntryPoint authenticationEntryPoint,
             final RestAccessDeniedHandler accessDeniedHandler) throws Exception {
@@ -99,7 +110,9 @@ public class SecurityConfig {
                         "/v3/api-docs/**").permitAll()
                 .anyRequest().authenticated())
             .oauth2ResourceServer(oauth2 -> oauth2
-                .jwt(jwt -> jwt.decoder(jwtDecoder))
+                .jwt(jwt -> jwt
+                        .decoder(jwtDecoder)
+                        .jwtAuthenticationConverter(jwtAuthenticationConverter))
                 .authenticationEntryPoint(authenticationEntryPoint)
                 .accessDeniedHandler(accessDeniedHandler))
             .exceptionHandling(ex -> ex
