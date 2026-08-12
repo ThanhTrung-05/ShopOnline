@@ -12,8 +12,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import java.time.Instant;
 
@@ -58,6 +60,12 @@ class CustomerControllerTest {
         return objectMapper.writeValueAsString(obj);
     }
 
+    private static RequestPostProcessor customerJwt() {
+        return jwt()
+                .jwt(builder -> builder.subject(SUBJECT))
+                .authorities(new SimpleGrantedAuthority("ROLE_CUSTOMER"));
+    }
+
     @Nested
     @DisplayName("GET /api/v1/customers/me")
     class GetProfile {
@@ -67,8 +75,7 @@ class CustomerControllerTest {
         void getProfile_shouldReturn200() throws Exception {
             when(customerProfileService.getProfile(SUBJECT)).thenReturn(sampleResponse());
 
-            mockMvc.perform(get("/api/v1/customers/me")
-                            .with(jwt().jwt(builder -> builder.subject(SUBJECT))))
+            mockMvc.perform(get("/api/v1/customers/me").with(customerJwt()))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data.customerId").value(1))
@@ -85,8 +92,7 @@ class CustomerControllerTest {
             when(customerProfileService.getProfile(SUBJECT))
                     .thenThrow(new ResourceNotFoundException("Customer", SUBJECT));
 
-            mockMvc.perform(get("/api/v1/customers/me")
-                            .with(jwt().jwt(builder -> builder.subject(SUBJECT))))
+            mockMvc.perform(get("/api/v1/customers/me").with(customerJwt()))
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.success").value(false));
         }
@@ -112,7 +118,7 @@ class CustomerControllerTest {
                     .thenReturn(updated);
 
             mockMvc.perform(patch("/api/v1/customers/me")
-                            .with(jwt().jwt(builder -> builder.subject(SUBJECT)))
+                            .with(customerJwt())
                             .contentType("application/json")
                             .content(toJson(new UpdateProfileRequest("Nguyễn Văn B", null))))
                     .andExpect(status().isOk())
@@ -128,7 +134,7 @@ class CustomerControllerTest {
                     .thenReturn(updated);
 
             mockMvc.perform(patch("/api/v1/customers/me")
-                            .with(jwt().jwt(builder -> builder.subject(SUBJECT)))
+                            .with(customerJwt())
                             .contentType("application/json")
                             .content(toJson(new UpdateProfileRequest(null, "0912345678"))))
                     .andExpect(status().isOk())
@@ -144,7 +150,7 @@ class CustomerControllerTest {
                     .thenReturn(updated);
 
             mockMvc.perform(patch("/api/v1/customers/me")
-                            .with(jwt().jwt(builder -> builder.subject(SUBJECT)))
+                            .with(customerJwt())
                             .contentType("application/json")
                             .content(toJson(new UpdateProfileRequest("Nguyễn Văn B", "0912345678"))))
                     .andExpect(status().isOk())
@@ -159,7 +165,7 @@ class CustomerControllerTest {
                     .thenReturn(sampleResponse());
 
             mockMvc.perform(patch("/api/v1/customers/me")
-                            .with(jwt().jwt(builder -> builder.subject(SUBJECT)))
+                            .with(customerJwt())
                             .contentType("application/json")
                             .content(toJson(new UpdateProfileRequest(null, null))))
                     .andExpect(status().isOk());
@@ -171,7 +177,7 @@ class CustomerControllerTest {
             final String tooLong = "A".repeat(201);
 
             mockMvc.perform(patch("/api/v1/customers/me")
-                            .with(jwt().jwt(builder -> builder.subject(SUBJECT)))
+                            .with(customerJwt())
                             .contentType("application/json")
                             .content(toJson(new UpdateProfileRequest(tooLong, null))))
                     .andExpect(status().isBadRequest())
@@ -182,7 +188,7 @@ class CustomerControllerTest {
         @DisplayName("400 — phone format invalid")
         void updateProfile_shouldReturn400_whenPhoneInvalid() throws Exception {
             mockMvc.perform(patch("/api/v1/customers/me")
-                            .with(jwt().jwt(builder -> builder.subject(SUBJECT)))
+                            .with(customerJwt())
                             .contentType("application/json")
                             .content(toJson(new UpdateProfileRequest(null, "123"))))
                     .andExpect(status().isBadRequest())

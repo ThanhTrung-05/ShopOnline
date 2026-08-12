@@ -108,6 +108,7 @@ public class SecurityConfig {
                         "/swagger-ui.html",
                         "/api-docs/**",
                         "/v3/api-docs/**").permitAll()
+                .requestMatchers("/api/v1/customers/me", "/api/v1/customers/me/**").hasRole("CUSTOMER")
                 .anyRequest().authenticated())
             .oauth2ResourceServer(oauth2 -> oauth2
                 .jwt(jwt -> jwt

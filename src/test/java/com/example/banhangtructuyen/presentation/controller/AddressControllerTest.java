@@ -12,8 +12,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import java.util.List;
 
@@ -62,6 +64,12 @@ class AddressControllerTest {
         return objectMapper.writeValueAsString(obj);
     }
 
+    private static RequestPostProcessor customerJwt() {
+        return jwt()
+                .jwt(builder -> builder.subject(SUBJECT))
+                .authorities(new SimpleGrantedAuthority("ROLE_CUSTOMER"));
+    }
+
     @Nested
     @DisplayName("GET /api/v1/customers/me/addresses")
     class ListAddresses {
@@ -72,7 +80,7 @@ class AddressControllerTest {
             when(addressService.listAddresses(SUBJECT))
                     .thenReturn(List.of(sampleResponse(1L, true), sampleResponse(2L, false)));
 
-            mockMvc.perform(get(BASE_URL).with(jwt().jwt(builder -> builder.subject(SUBJECT))))
+            mockMvc.perform(get(BASE_URL).with(customerJwt()))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.data.length()").value(2))
                     .andExpect(jsonPath("$.data[0].isDefault").value(true));
@@ -94,7 +102,7 @@ class AddressControllerTest {
         void getAddress_shouldReturn200() throws Exception {
             when(addressService.getAddress(SUBJECT, 1L)).thenReturn(sampleResponse(1L, true));
 
-            mockMvc.perform(get(BASE_URL + "/1").with(jwt().jwt(builder -> builder.subject(SUBJECT))))
+            mockMvc.perform(get(BASE_URL + "/1").with(customerJwt()))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.data.addressId").value(1))
                     .andExpect(jsonPath("$.data.customerId").doesNotExist());
@@ -106,7 +114,7 @@ class AddressControllerTest {
             when(addressService.getAddress(SUBJECT, 99L))
                     .thenThrow(new ResourceNotFoundException("Address", 99L));
 
-            mockMvc.perform(get(BASE_URL + "/99").with(jwt().jwt(builder -> builder.subject(SUBJECT))))
+            mockMvc.perform(get(BASE_URL + "/99").with(customerJwt()))
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.success").value(false));
         }
@@ -123,7 +131,7 @@ class AddressControllerTest {
                     .thenReturn(sampleResponse(1L, true));
 
             mockMvc.perform(post(BASE_URL)
-                            .with(jwt().jwt(builder -> builder.subject(SUBJECT)))
+                            .with(customerJwt())
                             .contentType("application/json")
                             .content(toJson(sampleRequest())))
                     .andExpect(status().isCreated())
@@ -137,7 +145,7 @@ class AddressControllerTest {
                     null, null, "TP. Hồ Chí Minh");
 
             mockMvc.perform(post(BASE_URL)
-                            .with(jwt().jwt(builder -> builder.subject(SUBJECT)))
+                            .with(customerJwt())
                             .contentType("application/json")
                             .content(toJson(invalid)))
                     .andExpect(status().isBadRequest())
@@ -151,7 +159,7 @@ class AddressControllerTest {
                     null, null, "TP. Hồ Chí Minh");
 
             mockMvc.perform(post(BASE_URL)
-                            .with(jwt().jwt(builder -> builder.subject(SUBJECT)))
+                            .with(customerJwt())
                             .contentType("application/json")
                             .content(toJson(invalid)))
                     .andExpect(status().isBadRequest());
@@ -164,7 +172,7 @@ class AddressControllerTest {
                     null, null, "TP. Hồ Chí Minh");
 
             mockMvc.perform(post(BASE_URL)
-                            .with(jwt().jwt(builder -> builder.subject(SUBJECT)))
+                            .with(customerJwt())
                             .contentType("application/json")
                             .content(toJson(invalid)))
                     .andExpect(status().isBadRequest())
@@ -192,7 +200,7 @@ class AddressControllerTest {
                     .thenReturn(sampleResponse(1L, true));
 
             mockMvc.perform(put(BASE_URL + "/1")
-                            .with(jwt().jwt(builder -> builder.subject(SUBJECT)))
+                            .with(customerJwt())
                             .contentType("application/json")
                             .content(toJson(sampleRequest())))
                     .andExpect(status().isOk())
@@ -206,7 +214,7 @@ class AddressControllerTest {
                     .thenThrow(new ResourceNotFoundException("Address", 99L));
 
             mockMvc.perform(put(BASE_URL + "/99")
-                            .with(jwt().jwt(builder -> builder.subject(SUBJECT)))
+                            .with(customerJwt())
                             .contentType("application/json")
                             .content(toJson(sampleRequest())))
                     .andExpect(status().isNotFound());
@@ -219,7 +227,7 @@ class AddressControllerTest {
                     null, null, "TP. Hồ Chí Minh");
 
             mockMvc.perform(put(BASE_URL + "/1")
-                            .with(jwt().jwt(builder -> builder.subject(SUBJECT)))
+                            .with(customerJwt())
                             .contentType("application/json")
                             .content(toJson(invalid)))
                     .andExpect(status().isBadRequest());
@@ -233,7 +241,7 @@ class AddressControllerTest {
         @Test
         @DisplayName("204 — deletes own address")
         void deleteAddress_shouldReturn204() throws Exception {
-            mockMvc.perform(delete(BASE_URL + "/1").with(jwt().jwt(builder -> builder.subject(SUBJECT))))
+            mockMvc.perform(delete(BASE_URL + "/1").with(customerJwt()))
                     .andExpect(status().isNoContent());
         }
 
@@ -243,7 +251,7 @@ class AddressControllerTest {
             org.mockito.Mockito.doThrow(new ResourceNotFoundException("Address", 99L))
                     .when(addressService).deleteAddress(SUBJECT, 99L);
 
-            mockMvc.perform(delete(BASE_URL + "/99").with(jwt().jwt(builder -> builder.subject(SUBJECT))))
+            mockMvc.perform(delete(BASE_URL + "/99").with(customerJwt()))
                     .andExpect(status().isNotFound());
         }
 
@@ -263,7 +271,7 @@ class AddressControllerTest {
         void setDefaultAddress_shouldReturn200() throws Exception {
             when(addressService.setDefaultAddress(SUBJECT, 2L)).thenReturn(sampleResponse(2L, true));
 
-            mockMvc.perform(patch(BASE_URL + "/2/default").with(jwt().jwt(builder -> builder.subject(SUBJECT))))
+            mockMvc.perform(patch(BASE_URL + "/2/default").with(customerJwt()))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.data.isDefault").value(true));
         }
@@ -274,7 +282,7 @@ class AddressControllerTest {
             when(addressService.setDefaultAddress(SUBJECT, 99L))
                     .thenThrow(new ResourceNotFoundException("Address", 99L));
 
-            mockMvc.perform(patch(BASE_URL + "/99/default").with(jwt().jwt(builder -> builder.subject(SUBJECT))))
+            mockMvc.perform(patch(BASE_URL + "/99/default").with(customerJwt()))
                     .andExpect(status().isNotFound());
         }
 
