@@ -9,6 +9,8 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.OracleDialect
+        type:
+          preferred_instant_jdbc_type: TIMESTAMP
   data:
     redis:
       host: ${REDIS_HOST}
