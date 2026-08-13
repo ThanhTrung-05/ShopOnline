@@ -4,6 +4,7 @@ import com.example.banhangtructuyen.application.dto.customer.AddressResponse;
 import com.example.banhangtructuyen.application.dto.customer.CustomerResponse;
 import com.example.banhangtructuyen.application.service.AddressService;
 import com.example.banhangtructuyen.application.service.AuthService;
+import com.example.banhangtructuyen.application.service.CartService;
 import com.example.banhangtructuyen.application.service.CategoryService;
 import com.example.banhangtructuyen.application.service.CustomerProfileService;
 import com.example.banhangtructuyen.application.service.ProductService;
@@ -75,6 +76,9 @@ class CustomerEndpointSecurityIntegrationTest {
     @MockBean
     private AuthService authService;
 
+    @MockBean
+    private CartService cartService;
+
     @BeforeEach
     void setUp() {
         when(jwtDecoder.decode(CUSTOMER_TOKEN))
@@ -112,6 +116,35 @@ class CustomerEndpointSecurityIntegrationTest {
     @DisplayName("anonymous request to customer profile is unauthorized")
     void anonymousRequest_isUnauthorized() throws Exception {
         mockMvc.perform(get("/api/v1/customers/me"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("CUSTOMER role can access cart add-item endpoint")
+    void customerRole_canAccessCartAddItemEndpoint() throws Exception {
+        mockMvc.perform(post("/api/v1/cart/items")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(CUSTOMER_TOKEN))
+                        .contentType("application/json")
+                        .content("{\"productId\":1,\"quantity\":1}"))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    @DisplayName("ADMIN-only role cannot access cart add-item endpoint")
+    void adminOnlyRole_cannotAccessCartAddItemEndpoint() throws Exception {
+        mockMvc.perform(post("/api/v1/cart/items")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(ADMIN_TOKEN))
+                        .contentType("application/json")
+                        .content("{\"productId\":1,\"quantity\":1}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("anonymous cart add-item request is unauthorized")
+    void anonymousCartAddItem_isUnauthorized() throws Exception {
+        mockMvc.perform(post("/api/v1/cart/items")
+                        .contentType("application/json")
+                        .content("{\"productId\":1,\"quantity\":1}"))
                 .andExpect(status().isUnauthorized());
     }
 
