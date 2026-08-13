@@ -17,12 +17,17 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpHeaders;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
@@ -47,11 +52,23 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @DisplayName("ProductController MockMvc Tests")
 class ProductControllerTest {
 
+    private static final String CLIENT_ID = "shoponline-backend";
+    private static final String ADMIN_TOKEN = "admin-token";
+
     @Autowired
     private MockMvc mockMvc;
 
     @MockBean
     private ProductService productService;
+
+    @MockBean
+    private JwtDecoder jwtDecoder;
+
+    @org.junit.jupiter.api.BeforeEach
+    void setUpSecurity() {
+        when(jwtDecoder.decode(ADMIN_TOKEN))
+                .thenReturn(jwtWithRoles(ADMIN_TOKEN, "admin-subject", List.of("ADMIN")));
+    }
 
     // ── Shared fixture ─────────────────────────────────────────────────────
 
@@ -270,6 +287,7 @@ class ProductControllerTest {
             when(productService.create(any(ProductRequest.class))).thenReturn(sampleProductDetail());
 
             mockMvc.perform(post("/api/v1/products")
+                            .header(HttpHeaders.AUTHORIZATION, bearer(ADMIN_TOKEN))
                             .contentType("application/json")
                             .content(objectMapper.writeValueAsString(sampleRequest())))
                     .andExpect(status().isOk())
@@ -284,6 +302,7 @@ class ProductControllerTest {
                     .thenThrow(new DuplicateResourceException("Product slug already exists: TP001"));
 
             mockMvc.perform(post("/api/v1/products")
+                            .header(HttpHeaders.AUTHORIZATION, bearer(ADMIN_TOKEN))
                             .contentType("application/json")
                             .content(objectMapper.writeValueAsString(sampleRequest())))
                     .andExpect(status().isConflict())
@@ -301,6 +320,7 @@ class ProductControllerTest {
                             new BigDecimal("180000"), null, "ACTIVE", 100));
 
             mockMvc.perform(post("/api/v1/products")
+                            .header(HttpHeaders.AUTHORIZATION, bearer(ADMIN_TOKEN))
                             .contentType("application/json")
                             .content(body))
                     .andExpect(status().isNotFound());
@@ -314,6 +334,7 @@ class ProductControllerTest {
                             new BigDecimal("180000"), null, "ACTIVE", 100));
 
             mockMvc.perform(post("/api/v1/products")
+                            .header(HttpHeaders.AUTHORIZATION, bearer(ADMIN_TOKEN))
                             .contentType("application/json")
                             .content(body))
                     .andExpect(status().isBadRequest());
@@ -327,6 +348,7 @@ class ProductControllerTest {
                             new BigDecimal("-1"), null, "ACTIVE", 100));
 
             mockMvc.perform(post("/api/v1/products")
+                            .header(HttpHeaders.AUTHORIZATION, bearer(ADMIN_TOKEN))
                             .contentType("application/json")
                             .content(body))
                     .andExpect(status().isBadRequest());
@@ -340,6 +362,7 @@ class ProductControllerTest {
                             new BigDecimal("180000"), null, "ACTIVE", -5));
 
             mockMvc.perform(post("/api/v1/products")
+                            .header(HttpHeaders.AUTHORIZATION, bearer(ADMIN_TOKEN))
                             .contentType("application/json")
                             .content(body))
                     .andExpect(status().isBadRequest());
@@ -376,6 +399,7 @@ class ProductControllerTest {
             when(productService.update(eq(1L), any(ProductRequest.class))).thenReturn(sampleProductDetail());
 
             mockMvc.perform(put("/api/v1/products/1")
+                            .header(HttpHeaders.AUTHORIZATION, bearer(ADMIN_TOKEN))
                             .contentType("application/json")
                             .content(objectMapper.writeValueAsString(sampleRequest())))
                     .andExpect(status().isOk())
@@ -389,6 +413,7 @@ class ProductControllerTest {
                     .thenThrow(new ResourceNotFoundException("Product", 99L));
 
             mockMvc.perform(put("/api/v1/products/99")
+                            .header(HttpHeaders.AUTHORIZATION, bearer(ADMIN_TOKEN))
                             .contentType("application/json")
                             .content(objectMapper.writeValueAsString(sampleRequest())))
                     .andExpect(status().isNotFound());
@@ -401,6 +426,7 @@ class ProductControllerTest {
                     .thenThrow(new DuplicateResourceException("Product slug already exists: TP001"));
 
             mockMvc.perform(put("/api/v1/products/1")
+                            .header(HttpHeaders.AUTHORIZATION, bearer(ADMIN_TOKEN))
                             .contentType("application/json")
                             .content(objectMapper.writeValueAsString(sampleRequest())))
                     .andExpect(status().isConflict());
@@ -418,7 +444,8 @@ class ProductControllerTest {
         @Test
         @DisplayName("200 — soft-deleted successfully")
         void deleteProduct_existing_returns200() throws Exception {
-            mockMvc.perform(delete("/api/v1/products/1"))
+            mockMvc.perform(delete("/api/v1/products/1")
+                            .header(HttpHeaders.AUTHORIZATION, bearer(ADMIN_TOKEN)))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true));
         }
@@ -429,8 +456,25 @@ class ProductControllerTest {
             org.mockito.Mockito.doThrow(new ResourceNotFoundException("Product", 99L))
                     .when(productService).delete(99L);
 
-            mockMvc.perform(delete("/api/v1/products/99"))
+            mockMvc.perform(delete("/api/v1/products/99")
+                            .header(HttpHeaders.AUTHORIZATION, bearer(ADMIN_TOKEN)))
                     .andExpect(status().isNotFound());
         }
+    }
+
+    private static String bearer(final String token) {
+        return "Bearer " + token;
+    }
+
+    private static Jwt jwtWithRoles(final String tokenValue, final String subject, final List<String> roles) {
+        return Jwt.withTokenValue(tokenValue)
+                .header("alg", "RS256")
+                .subject(subject)
+                .issuedAt(Instant.parse("2026-08-12T00:00:00Z"))
+                .expiresAt(Instant.parse("2026-08-12T01:00:00Z"))
+                .claim("iss", "http://localhost:8081/realms/shoponline")
+                .audience(List.of(CLIENT_ID))
+                .claim("resource_access", Map.of(CLIENT_ID, Map.of("roles", roles)))
+                .build();
     }
 }

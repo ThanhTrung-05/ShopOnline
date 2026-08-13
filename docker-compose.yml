@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # 1. Oracle Database (19c)
   oracledb:
@@ -71,7 +69,75 @@ services:
       timeout: 10s
       retries: 5
 
-  # 5. Spring Boot Backend
+  # 5. PostgreSQL for Keycloak
+  keycloak-db:
+    image: postgres:16.4-alpine
+    container_name: bhtt-keycloak-db
+    environment:
+      - POSTGRES_DB=${KEYCLOAK_DB_NAME}
+      - POSTGRES_USER=${KEYCLOAK_DB_USER}
+      - POSTGRES_PASSWORD=${KEYCLOAK_DB_PASSWORD}
+    volumes:
+      - keycloak-db-data:/var/lib/postgresql/data
+    networks:
+      - bhtt-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${KEYCLOAK_DB_USER} -d ${KEYCLOAK_DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 5b. Mailpit (local SMTP test server for Keycloak emails)
+  mailpit:
+    image: axllent/mailpit:v1.20
+    container_name: bhtt-mailpit
+    ports:
+      - "8025:8025"
+    networks:
+      - bhtt-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8025/api/v1/info"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 6. Keycloak (Identity Provider)
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.0
+    container_name: bhtt-keycloak
+    command: ["start-dev", "--import-realm"]
+    environment:
+      - KC_DB=postgres
+      - KC_DB_URL=jdbc:postgresql://keycloak-db:5432/${KEYCLOAK_DB_NAME}
+      - KC_DB_USERNAME=${KEYCLOAK_DB_USER}
+      - KC_DB_PASSWORD=${KEYCLOAK_DB_PASSWORD}
+      - KC_BOOTSTRAP_ADMIN_USERNAME=${KC_BOOTSTRAP_ADMIN_USERNAME}
+      - KC_BOOTSTRAP_ADMIN_PASSWORD=${KC_BOOTSTRAP_ADMIN_PASSWORD}
+      - KEYCLOAK_USER_ADMIN_CLIENT_SECRET=${KEYCLOAK_USER_ADMIN_CLIENT_SECRET}
+      - KC_HOSTNAME=http://localhost:8081
+      - KC_HOSTNAME_STRICT=false
+      - KC_HEALTH_ENABLED=true
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./keycloak/import:/opt/keycloak/data/import
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+    networks:
+      - bhtt-network
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >
+          bash -c '{ printf "HEAD /health/ready HTTP/1.0\r\n\r\n" >&0;
+          grep "HTTP/1.0 200"; } 0<>/dev/tcp/localhost/9000'
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  # 7. Spring Boot Backend
   backend:
     build:
       context: .
@@ -111,6 +177,7 @@ services:
 volumes:
   oracle-data:
   redis-data:
+  keycloak-db-data:
 
 networks:
   bhtt-network:
