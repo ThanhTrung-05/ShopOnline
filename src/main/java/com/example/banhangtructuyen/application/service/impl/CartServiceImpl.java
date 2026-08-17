@@ -2,6 +2,7 @@ package com.example.banhangtructuyen.application.service.impl;
 
 import com.example.banhangtructuyen.application.dto.cart.AddCartItemRequest;
 import com.example.banhangtructuyen.application.dto.cart.CartItemResponse;
+import com.example.banhangtructuyen.application.dto.cart.UpdateCartItemQuantityRequest;
 import com.example.banhangtructuyen.application.service.CartService;
 import com.example.banhangtructuyen.domain.exception.ResourceNotFoundException;
 import com.example.banhangtructuyen.domain.model.Cart;
@@ -30,8 +31,7 @@ public class CartServiceImpl implements CartService {
 
     @Override
     public CartItemResponse addItem(final String keycloakSubject, final AddCartItemRequest request) {
-        final Customer customer = customerRepository.findByKeycloakUserId(keycloakSubject)
-                .orElseThrow(() -> new ResourceNotFoundException("Customer", keycloakSubject));
+        final Customer customer = findCustomer(keycloakSubject);
         final Product product = productRepository.findActiveById(request.productId())
                 .orElseThrow(() -> new ResourceNotFoundException("Product", request.productId()));
         final Cart cart = cartRepository.findByCustomerId(customer.getCustomerId())
@@ -50,6 +50,36 @@ public class CartServiceImpl implements CartService {
                         .build());
 
         return toResponse(cartItemRepository.save(item));
+    }
+
+    @Override
+    public CartItemResponse updateItemQuantity(
+            final String keycloakSubject,
+            final Long cartItemId,
+            final UpdateCartItemQuantityRequest request) {
+        final Customer customer = findCustomer(keycloakSubject);
+        final CartItem item = findOwnedCartItem(customer.getCustomerId(), cartItemId);
+
+        item.setQuantity(request.quantity());
+        return toResponse(cartItemRepository.save(item));
+    }
+
+    @Override
+    public void removeItem(final String keycloakSubject, final Long cartItemId) {
+        final Customer customer = findCustomer(keycloakSubject);
+        final CartItem item = findOwnedCartItem(customer.getCustomerId(), cartItemId);
+
+        cartItemRepository.delete(item);
+    }
+
+    private Customer findCustomer(final String keycloakSubject) {
+        return customerRepository.findByKeycloakUserId(keycloakSubject)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer", keycloakSubject));
+    }
+
+    private CartItem findOwnedCartItem(final Long customerId, final Long cartItemId) {
+        return cartItemRepository.findByCart_CustomerIdAndCartItemId(customerId, cartItemId)
+                .orElseThrow(() -> new ResourceNotFoundException("CartItem", cartItemId));
     }
 
     private static CartItem incrementQuantity(final CartItem item, final int quantityToAdd) {

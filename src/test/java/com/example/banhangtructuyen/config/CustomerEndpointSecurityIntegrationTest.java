@@ -29,8 +29,12 @@ import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -146,6 +150,76 @@ class CustomerEndpointSecurityIntegrationTest {
                         .contentType("application/json")
                         .content("{\"productId\":1,\"quantity\":1}"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("CUSTOMER role can access cart update endpoint")
+    void customerRole_canAccessCartUpdateEndpoint() throws Exception {
+        mockMvc.perform(put("/api/v1/cart/items/1")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(CUSTOMER_TOKEN))
+                        .contentType("application/json")
+                        .content("{\"quantity\":2}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("ADMIN-only role cannot access cart update endpoint")
+    void adminOnlyRole_cannotAccessCartUpdateEndpoint() throws Exception {
+        mockMvc.perform(put("/api/v1/cart/items/1")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(ADMIN_TOKEN))
+                        .contentType("application/json")
+                        .content("{\"quantity\":2}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("anonymous cart update request is unauthorized")
+    void anonymousCartUpdate_isUnauthorized() throws Exception {
+        mockMvc.perform(put("/api/v1/cart/items/1")
+                        .contentType("application/json")
+                        .content("{\"quantity\":2}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("CUSTOMER role can access cart delete endpoint")
+    void customerRole_canAccessCartDeleteEndpoint() throws Exception {
+        mockMvc.perform(delete("/api/v1/cart/items/1")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(CUSTOMER_TOKEN)))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("ADMIN-only role cannot access cart delete endpoint")
+    void adminOnlyRole_cannotAccessCartDeleteEndpoint() throws Exception {
+        mockMvc.perform(delete("/api/v1/cart/items/1")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(ADMIN_TOKEN)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("anonymous cart delete request is unauthorized")
+    void anonymousCartDelete_isUnauthorized() throws Exception {
+        mockMvc.perform(delete("/api/v1/cart/items/1"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("CORS preflight allows PUT and DELETE")
+    void corsPreflight_allowsPutAndDelete() throws Exception {
+        mockMvc.perform(options("/api/v1/cart/items/1")
+                        .header(HttpHeaders.ORIGIN, "http://localhost:3000")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "PUT"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_METHODS,
+                        org.hamcrest.Matchers.containsString("PUT")));
+
+        mockMvc.perform(options("/api/v1/cart/items/1")
+                        .header(HttpHeaders.ORIGIN, "http://localhost:3000")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "DELETE"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_METHODS,
+                        org.hamcrest.Matchers.containsString("DELETE")));
     }
 
     @Test

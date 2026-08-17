@@ -2,6 +2,7 @@ package com.example.banhangtructuyen.application.service;
 
 import com.example.banhangtructuyen.application.dto.cart.AddCartItemRequest;
 import com.example.banhangtructuyen.application.dto.cart.CartItemResponse;
+import com.example.banhangtructuyen.application.dto.cart.UpdateCartItemQuantityRequest;
 import com.example.banhangtructuyen.application.service.impl.CartServiceImpl;
 import com.example.banhangtructuyen.domain.exception.ResourceNotFoundException;
 import com.example.banhangtructuyen.domain.model.Cart;
@@ -192,6 +193,92 @@ class CartServiceImplTest {
             assertThatThrownBy(() -> service.addItem(SUBJECT, new AddCartItemRequest(PRODUCT_ID, 1)))
                     .isInstanceOf(ResourceNotFoundException.class)
                     .hasMessageContaining("Customer");
+        }
+    }
+
+    @Nested
+    @DisplayName("updateItemQuantity")
+    class UpdateItemQuantity {
+
+        @Test
+        @DisplayName("owned CartItem quantity is replaced")
+        void updateItemQuantity_shouldReplaceQuantity_whenItemBelongsToCustomer() {
+            final Cart cart = sampleCart();
+            final Product product = sampleProduct();
+            final CartItem item = sampleCartItem(cart, product, 3);
+            when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
+            when(cartItemRepository.findByCart_CustomerIdAndCartItemId(CUSTOMER_ID, 1000L))
+                    .thenReturn(Optional.of(item));
+            when(cartItemRepository.save(item)).thenReturn(item);
+
+            final CartItemResponse response = service.updateItemQuantity(
+                    SUBJECT, 1000L, new UpdateCartItemQuantityRequest(9));
+
+            assertThat(response.quantity()).isEqualTo(9);
+            verify(productRepository, never()).findActiveById(any());
+        }
+
+        @Test
+        @DisplayName("missing CartItem is rejected")
+        void updateItemQuantity_shouldThrow_whenCartItemMissing() {
+            when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
+            when(cartItemRepository.findByCart_CustomerIdAndCartItemId(CUSTOMER_ID, 404L))
+                    .thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.updateItemQuantity(
+                    SUBJECT, 404L, new UpdateCartItemQuantityRequest(1)))
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .hasMessageContaining("CartItem");
+
+            verify(cartItemRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("not-owned CartItem is rejected as not found")
+        void updateItemQuantity_shouldThrowNotFound_whenCartItemBelongsToAnotherCustomer() {
+            when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
+            when(cartItemRepository.findByCart_CustomerIdAndCartItemId(CUSTOMER_ID, 2000L))
+                    .thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.updateItemQuantity(
+                    SUBJECT, 2000L, new UpdateCartItemQuantityRequest(1)))
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .hasMessage("CartItem not found with id: 2000");
+
+            verify(cartItemRepository, never()).save(any());
+        }
+    }
+
+    @Nested
+    @DisplayName("removeItem")
+    class RemoveItem {
+
+        @Test
+        @DisplayName("owned CartItem is deleted")
+        void removeItem_shouldDelete_whenItemBelongsToCustomer() {
+            final CartItem item = sampleCartItem(sampleCart(), sampleProduct(), 3);
+            when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
+            when(cartItemRepository.findByCart_CustomerIdAndCartItemId(CUSTOMER_ID, 1000L))
+                    .thenReturn(Optional.of(item));
+
+            service.removeItem(SUBJECT, 1000L);
+
+            verify(cartItemRepository).delete(item);
+            verify(productRepository, never()).findActiveById(any());
+        }
+
+        @Test
+        @DisplayName("missing or not-owned CartItem is rejected as not found")
+        void removeItem_shouldThrowNotFound_whenCartItemMissingOrNotOwned() {
+            when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
+            when(cartItemRepository.findByCart_CustomerIdAndCartItemId(CUSTOMER_ID, 2000L))
+                    .thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.removeItem(SUBJECT, 2000L))
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .hasMessage("CartItem not found with id: 2000");
+
+            verify(cartItemRepository, never()).delete(any());
         }
     }
 }
