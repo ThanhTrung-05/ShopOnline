@@ -2,6 +2,7 @@ package com.example.banhangtructuyen.presentation.controller;
 
 import com.example.banhangtructuyen.application.dto.cart.AddCartItemRequest;
 import com.example.banhangtructuyen.application.dto.cart.CartItemResponse;
+import com.example.banhangtructuyen.application.dto.cart.UpdateCartItemQuantityRequest;
 import com.example.banhangtructuyen.application.service.CartService;
 import com.example.banhangtructuyen.domain.exception.ResourceNotFoundException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -20,9 +21,12 @@ import java.math.BigDecimal;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -106,6 +110,79 @@ class CartControllerTest {
                         .contentType("application/json")
                         .content(toJson(new AddCartItemRequest(10L, 1))))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("PUT /api/v1/cart/items/{cartItemId} returns updated cart item")
+    void updateItemQuantity_shouldReturnOk() throws Exception {
+        when(cartService.updateItemQuantity(eq(SUBJECT), eq(1L), any(UpdateCartItemQuantityRequest.class)))
+                .thenReturn(new CartItemResponse(1L, 10L, "Lavie 500ml", 5, new BigDecimal("5000.00")));
+
+        mockMvc.perform(put("/api/v1/cart/items/1")
+                        .with(customerJwt())
+                        .contentType("application/json")
+                        .content(toJson(new UpdateCartItemQuantityRequest(5))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.cartItemId").value(1))
+                .andExpect(jsonPath("$.data.quantity").value(5));
+    }
+
+    @Test
+    @DisplayName("update quantity 0 returns 400")
+    void updateItemQuantity_shouldReturn400_whenQuantityIsZero() throws Exception {
+        mockMvc.perform(put("/api/v1/cart/items/1")
+                        .with(customerJwt())
+                        .contentType("application/json")
+                        .content(toJson(new UpdateCartItemQuantityRequest(0))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    @DisplayName("update quantity over 1000 returns 400")
+    void updateItemQuantity_shouldReturn400_whenQuantityExceedsLimit() throws Exception {
+        mockMvc.perform(put("/api/v1/cart/items/1")
+                        .with(customerJwt())
+                        .contentType("application/json")
+                        .content(toJson(new UpdateCartItemQuantityRequest(1001))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    @DisplayName("update missing or not-owned cart item returns 404")
+    void updateItemQuantity_shouldReturn404_whenCartItemMissingOrNotOwned() throws Exception {
+        when(cartService.updateItemQuantity(eq(SUBJECT), eq(99L), any(UpdateCartItemQuantityRequest.class)))
+                .thenThrow(new ResourceNotFoundException("CartItem", 99L));
+
+        mockMvc.perform(put("/api/v1/cart/items/99")
+                        .with(customerJwt())
+                        .contentType("application/json")
+                        .content(toJson(new UpdateCartItemQuantityRequest(1))))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    @DisplayName("DELETE /api/v1/cart/items/{cartItemId} returns success")
+    void removeItem_shouldReturnOk() throws Exception {
+        mockMvc.perform(delete("/api/v1/cart/items/1")
+                        .with(customerJwt()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+    }
+
+    @Test
+    @DisplayName("delete missing or not-owned cart item returns 404")
+    void removeItem_shouldReturn404_whenCartItemMissingOrNotOwned() throws Exception {
+        doThrow(new ResourceNotFoundException("CartItem", 99L))
+                .when(cartService).removeItem(SUBJECT, 99L);
+
+        mockMvc.perform(delete("/api/v1/cart/items/99")
+                        .with(customerJwt()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.success").value(false));
     }
 
     private String toJson(final Object value) throws Exception {
