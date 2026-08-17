@@ -2,6 +2,8 @@ package com.example.banhangtructuyen.application.service.impl;
 
 import com.example.banhangtructuyen.application.dto.cart.AddCartItemRequest;
 import com.example.banhangtructuyen.application.dto.cart.CartItemResponse;
+import com.example.banhangtructuyen.application.dto.cart.CartResponse;
+import com.example.banhangtructuyen.application.dto.cart.CartViewItemResponse;
 import com.example.banhangtructuyen.application.dto.cart.UpdateCartItemQuantityRequest;
 import com.example.banhangtructuyen.application.service.CartService;
 import com.example.banhangtructuyen.domain.exception.ResourceNotFoundException;
@@ -17,6 +19,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -28,6 +33,25 @@ public class CartServiceImpl implements CartService {
     private final CartItemRepository cartItemRepository;
     private final CustomerRepository customerRepository;
     private final ProductRepository productRepository;
+
+    @Override
+    @Transactional(readOnly = true)
+    public CartResponse getCurrentCart(final String keycloakSubject) {
+        final Customer customer = findCustomer(keycloakSubject);
+        if (cartRepository.findByCustomerId(customer.getCustomerId()).isEmpty()) {
+            return emptyCart();
+        }
+
+        final List<CartViewItemResponse> items = cartItemRepository.findViewItemsByCustomerId(customer.getCustomerId())
+                .stream()
+                .map(CartServiceImpl::toViewItemResponse)
+                .toList();
+        final BigDecimal subtotal = items.stream()
+                .map(CartViewItemResponse::itemSubtotal)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        return new CartResponse(items, subtotal);
+    }
 
     @Override
     public CartItemResponse addItem(final String keycloakSubject, final AddCartItemRequest request) {
@@ -99,5 +123,22 @@ public class CartServiceImpl implements CartService {
                 item.getQuantity(),
                 item.getUnitPrice()
         );
+    }
+
+    private static CartViewItemResponse toViewItemResponse(final CartItem item) {
+        final BigDecimal itemSubtotal = item.getUnitPrice()
+                .multiply(BigDecimal.valueOf(item.getQuantity()));
+        return new CartViewItemResponse(
+                item.getCartItemId(),
+                item.getProduct().getProductId(),
+                item.getProduct().getProductName(),
+                item.getQuantity(),
+                item.getUnitPrice(),
+                itemSubtotal
+        );
+    }
+
+    private static CartResponse emptyCart() {
+        return new CartResponse(List.of(), BigDecimal.ZERO);
     }
 }

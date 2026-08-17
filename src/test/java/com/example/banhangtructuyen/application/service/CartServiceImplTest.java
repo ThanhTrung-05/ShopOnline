@@ -2,6 +2,7 @@ package com.example.banhangtructuyen.application.service;
 
 import com.example.banhangtructuyen.application.dto.cart.AddCartItemRequest;
 import com.example.banhangtructuyen.application.dto.cart.CartItemResponse;
+import com.example.banhangtructuyen.application.dto.cart.CartResponse;
 import com.example.banhangtructuyen.application.dto.cart.UpdateCartItemQuantityRequest;
 import com.example.banhangtructuyen.application.service.impl.CartServiceImpl;
 import com.example.banhangtructuyen.domain.exception.ResourceNotFoundException;
@@ -23,6 +24,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -90,9 +92,140 @@ class CartServiceImplTest {
                 .build();
     }
 
+    private static CartItem sampleCartItem(
+            final Long cartItemId,
+            final Cart cart,
+            final Product product,
+            final int quantity,
+            final String unitPrice) {
+        return CartItem.builder()
+                .cartItemId(cartItemId)
+                .cart(cart)
+                .product(product)
+                .quantity(quantity)
+                .unitPrice(new BigDecimal(unitPrice))
+                .build();
+    }
+
     private void stubCustomerAndProduct() {
         when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
         when(productRepository.findActiveById(PRODUCT_ID)).thenReturn(Optional.of(sampleProduct()));
+    }
+
+    @Nested
+    @DisplayName("getCurrentCart")
+    class GetCurrentCart {
+
+        @Test
+        @DisplayName("cart with one item returns item and subtotal")
+        void getCurrentCart_shouldReturnOneItemAndSubtotal() {
+            final Cart cart = sampleCart();
+            final Product product = sampleProduct();
+            final CartItem item = sampleCartItem(1000L, cart, product, 2, "5000.00");
+            when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
+            when(cartRepository.findByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(cart));
+            when(cartItemRepository.findViewItemsByCustomerId(CUSTOMER_ID)).thenReturn(List.of(item));
+
+            final CartResponse response = service.getCurrentCart(SUBJECT);
+
+            assertThat(response.items()).hasSize(1);
+            assertThat(response.items().get(0).cartItemId()).isEqualTo(1000L);
+            assertThat(response.items().get(0).productId()).isEqualTo(PRODUCT_ID);
+            assertThat(response.items().get(0).productName()).isEqualTo("Lavie 500ml");
+            assertThat(response.items().get(0).quantity()).isEqualTo(2);
+            assertThat(response.items().get(0).unitPrice()).isEqualByComparingTo("5000.00");
+            assertThat(response.items().get(0).itemSubtotal()).isEqualByComparingTo("10000.00");
+            assertThat(response.subtotal()).isEqualByComparingTo("10000.00");
+        }
+
+        @Test
+        @DisplayName("cart with multiple items sums item subtotals")
+        void getCurrentCart_shouldReturnMultipleItemsAndSubtotal() {
+            final Cart cart = sampleCart();
+            final Product productOne = sampleProduct();
+            final Product productTwo = Product.builder()
+                    .productId(200L)
+                    .productName("Snack")
+                    .price(new BigDecimal("9999.00"))
+                    .status(Product.ProductStatus.ACTIVE)
+                    .build();
+            when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
+            when(cartRepository.findByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(cart));
+            when(cartItemRepository.findViewItemsByCustomerId(CUSTOMER_ID)).thenReturn(List.of(
+                    sampleCartItem(1000L, cart, productOne, 2, "5000.00"),
+                    sampleCartItem(1001L, cart, productTwo, 3, "12000.00")
+            ));
+
+            final CartResponse response = service.getCurrentCart(SUBJECT);
+
+            assertThat(response.items()).hasSize(2);
+            assertThat(response.items().get(0).itemSubtotal()).isEqualByComparingTo("10000.00");
+            assertThat(response.items().get(1).itemSubtotal()).isEqualByComparingTo("36000.00");
+            assertThat(response.subtotal()).isEqualByComparingTo("46000.00");
+        }
+
+        @Test
+        @DisplayName("uses CartItem unitPrice even when Product price differs")
+        void getCurrentCart_shouldUseCartItemUnitPrice_whenProductPriceDiffers() {
+            final Cart cart = sampleCart();
+            final Product product = Product.builder()
+                    .productId(PRODUCT_ID)
+                    .productName("Lavie 500ml")
+                    .price(new BigDecimal("9999.00"))
+                    .status(Product.ProductStatus.ACTIVE)
+                    .build();
+            when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
+            when(cartRepository.findByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(cart));
+            when(cartItemRepository.findViewItemsByCustomerId(CUSTOMER_ID)).thenReturn(List.of(
+                    sampleCartItem(1000L, cart, product, 4, "5000.00")
+            ));
+
+            final CartResponse response = service.getCurrentCart(SUBJECT);
+
+            assertThat(response.items().get(0).unitPrice()).isEqualByComparingTo("5000.00");
+            assertThat(response.items().get(0).itemSubtotal()).isEqualByComparingTo("20000.00");
+            assertThat(response.subtotal()).isEqualByComparingTo("20000.00");
+            verify(productRepository, never()).findActiveById(any());
+        }
+
+        @Test
+        @DisplayName("empty cart returns empty items and zero subtotal")
+        void getCurrentCart_shouldReturnEmpty_whenCartHasNoItems() {
+            when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
+            when(cartRepository.findByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(sampleCart()));
+            when(cartItemRepository.findViewItemsByCustomerId(CUSTOMER_ID)).thenReturn(List.of());
+
+            final CartResponse response = service.getCurrentCart(SUBJECT);
+
+            assertThat(response.items()).isEmpty();
+            assertThat(response.subtotal()).isEqualByComparingTo("0");
+        }
+
+        @Test
+        @DisplayName("no cart returns empty items and zero subtotal")
+        void getCurrentCart_shouldReturnEmpty_whenCustomerHasNoCart() {
+            when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
+            when(cartRepository.findByCustomerId(CUSTOMER_ID)).thenReturn(Optional.empty());
+
+            final CartResponse response = service.getCurrentCart(SUBJECT);
+
+            assertThat(response.items()).isEmpty();
+            assertThat(response.subtotal()).isEqualByComparingTo("0");
+            verify(cartItemRepository, never()).findViewItemsByCustomerId(any());
+        }
+
+        @Test
+        @DisplayName("customer not found returns ResourceNotFound")
+        void getCurrentCart_shouldThrow_whenCustomerSubjectNotFound() {
+            when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.getCurrentCart(SUBJECT))
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .hasMessageContaining("Customer");
+
+            verify(cartRepository, never()).findByCustomerId(any());
+            verify(cartItemRepository, never()).findViewItemsByCustomerId(any());
+        }
     }
 
     @Nested

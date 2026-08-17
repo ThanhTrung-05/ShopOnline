@@ -2,6 +2,8 @@ package com.example.banhangtructuyen.presentation.controller;
 
 import com.example.banhangtructuyen.application.dto.cart.AddCartItemRequest;
 import com.example.banhangtructuyen.application.dto.cart.CartItemResponse;
+import com.example.banhangtructuyen.application.dto.cart.CartResponse;
+import com.example.banhangtructuyen.application.dto.cart.CartViewItemResponse;
 import com.example.banhangtructuyen.application.dto.cart.UpdateCartItemQuantityRequest;
 import com.example.banhangtructuyen.application.service.CartService;
 import com.example.banhangtructuyen.domain.exception.ResourceNotFoundException;
@@ -18,6 +20,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -25,6 +28,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -46,6 +50,74 @@ class CartControllerTest {
 
     @MockBean
     private CartService cartService;
+
+    @Test
+    @DisplayName("GET /api/v1/cart returns current cart with subtotal for CUSTOMER")
+    void getCurrentCart_shouldReturnOk_whenCustomer() throws Exception {
+        when(cartService.getCurrentCart(SUBJECT)).thenReturn(new CartResponse(
+                List.of(new CartViewItemResponse(
+                        1L,
+                        10L,
+                        "Lavie 500ml",
+                        2,
+                        new BigDecimal("5000.00"),
+                        new BigDecimal("10000.00"))),
+                new BigDecimal("10000.00")
+        ));
+
+        mockMvc.perform(get("/api/v1/cart")
+                        .with(customerJwt()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.items[0].cartItemId").value(1))
+                .andExpect(jsonPath("$.data.items[0].productId").value(10))
+                .andExpect(jsonPath("$.data.items[0].productName").value("Lavie 500ml"))
+                .andExpect(jsonPath("$.data.items[0].quantity").value(2))
+                .andExpect(jsonPath("$.data.items[0].unitPrice").value(5000.00))
+                .andExpect(jsonPath("$.data.items[0].itemSubtotal").value(10000.00))
+                .andExpect(jsonPath("$.data.subtotal").value(10000.00));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/cart returns empty cart")
+    void getCurrentCart_shouldReturnEmptyCart() throws Exception {
+        when(cartService.getCurrentCart(SUBJECT)).thenReturn(new CartResponse(List.of(), BigDecimal.ZERO));
+
+        mockMvc.perform(get("/api/v1/cart")
+                        .with(customerJwt()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items").isEmpty())
+                .andExpect(jsonPath("$.data.subtotal").value(0));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/cart returns 404 when Customer is not found")
+    void getCurrentCart_shouldReturn404_whenCustomerNotFound() throws Exception {
+        when(cartService.getCurrentCart(SUBJECT))
+                .thenThrow(new ResourceNotFoundException("Customer", SUBJECT));
+
+        mockMvc.perform(get("/api/v1/cart")
+                        .with(customerJwt()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/cart returns 403 for ADMIN without CUSTOMER")
+    void getCurrentCart_shouldReturn403_whenAdminOnly() throws Exception {
+        mockMvc.perform(get("/api/v1/cart")
+                        .with(adminJwt()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/cart returns 401 for anonymous")
+    void getCurrentCart_shouldReturn401_whenAnonymous() throws Exception {
+        mockMvc.perform(get("/api/v1/cart"))
+                .andExpect(status().isUnauthorized());
+    }
 
     @Test
     @DisplayName("POST /api/v1/cart/items returns created cart item")
@@ -193,5 +265,11 @@ class CartControllerTest {
         return jwt()
                 .jwt(builder -> builder.subject(SUBJECT))
                 .authorities(new SimpleGrantedAuthority("ROLE_CUSTOMER"));
+    }
+
+    private static RequestPostProcessor adminJwt() {
+        return jwt()
+                .jwt(builder -> builder.subject(SUBJECT))
+                .authorities(new SimpleGrantedAuthority("ROLE_ADMIN"));
     }
 }
