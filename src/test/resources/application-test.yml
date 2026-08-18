@@ -19,7 +19,7 @@ app:
       issuer: http://localhost:8081/realms/shoponline
       audience: shoponline-backend
     cors:
-      allowed-origins: http://localhost:3000
+      allowed-origins: http://localhost:3000,http://localhost:5173
   keycloak:
     admin:
       base-url: http://localhost:8081

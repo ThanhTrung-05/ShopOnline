@@ -44,6 +44,11 @@ Root package: `com.example.banhangtructuyen`
 
 - `docker-compose.yml` gồm các service: `oracledb`, `redis`, `zookeeper`, `kafka`, `backend`, `frontend`.
 - `Dockerfile` backend: multi-stage build — build bằng Gradle trên `eclipse-temurin:17-jdk-alpine`, runtime trên `eclipse-temurin:17-jre-alpine` với user non-root.
+- Backend chạy trong Docker Compose phải kết nối Oracle qua service DNS `jdbc:oracle:thin:@oracledb:1521/XEPDB1`.
+- Backend chạy trực tiếp trên host dùng cổng publish của Oracle Compose: `jdbc:oracle:thin:@localhost:1522/XEPDB1`.
+- Local backend dùng profile `local` (`src/main/resources/application-local.yml`) để tránh fallback sang H2:
+  `$env:SPRING_PROFILES_ACTIVE="local"; $env:ORACLE_USER="<user>"; $env:ORACLE_PASSWORD="<password>"; .\gradlew.bat bootRun`.
+- Restart bình thường dùng `docker compose stop/start` hoặc `docker compose up -d`; không dùng `docker compose down -v` trừ khi cố ý xóa dữ liệu. Mapping `JWT sub -> CUSTOMERS.KEYCLOAK_USER_ID` phụ thuộc vào việc giữ nguyên named volumes `oracle-data` và `keycloak-db-data`.
 
 ## Testing
 
