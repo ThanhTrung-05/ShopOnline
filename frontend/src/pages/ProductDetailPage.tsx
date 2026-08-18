@@ -11,7 +11,8 @@ export default function ProductDetailPage() {
   const [loading, setLoading] = useState(true);
   const [qty, setQty] = useState(1);
   const [adding, setAdding] = useState(false);
-  const { addItem } = useCartStore();
+  const { addItem, updateItemQuantity, removeItem } = useCartStore();
+  const cartItem = useCartStore((state) => state.items.find((item) => item.productId === Number(id)));
   const { isAuthenticated } = useAuthStore();
   const navigate = useNavigate();
 
@@ -22,13 +23,47 @@ export default function ProductDetailPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
+  useEffect(() => {
+    setQty(cartItem?.quantity ?? 1);
+  }, [cartItem?.quantity]);
+
+  const displayedQty = cartItem?.quantity ?? qty;
+
   const handleAdd = async () => {
     if (!isAuthenticated) { toast.error('Vui lòng đăng nhập'); return; }
     setAdding(true);
     try {
-      await addItem(product!.id, qty);
-      toast.success(`Đã thêm ${qty} sản phẩm vào giỏ! 🛍️`);
+      if (cartItem) {
+        await updateItemQuantity(cartItem.cartItemId, displayedQty);
+      } else {
+        await addItem(product!.id, displayedQty);
+      }
+      toast.success(`Đã thêm ${displayedQty} sản phẩm vào giỏ! 🛍️`);
     } finally { setAdding(false); }
+  };
+
+  const handleDecrease = async () => {
+    if (cartItem) {
+      if (cartItem.quantity <= 1) {
+        await removeItem(cartItem.cartItemId);
+      } else {
+        await updateItemQuantity(cartItem.cartItemId, cartItem.quantity - 1);
+      }
+      return;
+    }
+
+    setQty(q => Math.max(1, q - 1));
+  };
+
+  const handleIncrease = async () => {
+    if (!product) return;
+
+    if (cartItem) {
+      await updateItemQuantity(cartItem.cartItemId, Math.min(product.inventoryCount, cartItem.quantity + 1));
+      return;
+    }
+
+    setQty(q => Math.min(product.inventoryCount, q + 1));
   };
 
   if (loading) return (
@@ -95,16 +130,16 @@ export default function ProductDetailPage() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Số lượng:</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 0, background: 'var(--bg-card)', borderRadius: 8, border: '1px solid var(--border)' }}>
-                  <button className="btn btn-ghost btn-sm" onClick={() => setQty(q => Math.max(1, q - 1))} style={{ border: 'none' }}>−</button>
-                  <span style={{ padding: '0 16px', fontWeight: 700 }}>{qty}</span>
-                  <button className="btn btn-ghost btn-sm" onClick={() => setQty(q => Math.min(product.inventoryCount, q + 1))} style={{ border: 'none' }}>+</button>
+                  <button className="btn btn-ghost btn-sm" onClick={handleDecrease} style={{ border: 'none' }}>−</button>
+                  <span aria-label={`cart quantity for ${product.name}`} style={{ padding: '0 16px', fontWeight: 700 }}>{displayedQty}</span>
+                  <button className="btn btn-ghost btn-sm" onClick={handleIncrease} style={{ border: 'none' }}>+</button>
                 </div>
               </div>
             )}
 
             <button className={`btn btn-lg btn-full ${isOutOfStock ? 'btn-ghost' : 'btn-primary'}`}
               onClick={handleAdd} disabled={isOutOfStock || adding}>
-              {adding ? <><span className="spinner" style={{ width: 18, height: 18 }} /> Đang thêm...</> : isOutOfStock ? 'Hết hàng' : `🛍️ Thêm vào giỏ — ${(product.priceIncludingVat * qty).toLocaleString('vi-VN')}₫`}
+              {adding ? <><span className="spinner" style={{ width: 18, height: 18 }} /> Đang thêm...</> : isOutOfStock ? 'Hết hàng' : `🛍️ Thêm vào giỏ — ${(product.priceIncludingVat * displayedQty).toLocaleString('vi-VN')}₫`}
             </button>
           </div>
         </div>

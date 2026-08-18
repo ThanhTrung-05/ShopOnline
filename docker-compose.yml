@@ -146,13 +146,15 @@ services:
     ports:
       - "8080:8080"
     depends_on:
+      oracledb:
+        condition: service_healthy
       redis:
         condition: service_healthy
       kafka:
         condition: service_healthy
     environment:
       - SPRING_PROFILES_ACTIVE=prod
-      - ORACLE_URL=jdbc:oracle:thin:@host.docker.internal:1521/XEPDB1
+      - ORACLE_URL=jdbc:oracle:thin:@oracledb:1521/XEPDB1
       - ORACLE_USER=BHTT
       - ORACLE_PASSWORD=123456
       - REDIS_HOST=redis

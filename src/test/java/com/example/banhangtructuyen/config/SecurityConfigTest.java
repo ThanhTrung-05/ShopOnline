@@ -46,6 +46,23 @@ class SecurityConfigTest {
     }
 
     @Test
+    @DisplayName("cart add-item preflight from Vite dev origin allows POST and required headers")
+    void cartAddItemPreflight_fromViteDevOrigin_allowsPostAndRequiredHeaders() throws Exception {
+        mockMvc.perform(options("/api/v1/cart/items")
+                        .header(HttpHeaders.ORIGIN, "http://localhost:5173")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "Authorization, Content-Type"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:5173"))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_METHODS,
+                        org.hamcrest.Matchers.containsString("POST")))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS,
+                        org.hamcrest.Matchers.allOf(
+                                org.hamcrest.Matchers.containsString("Authorization"),
+                                org.hamcrest.Matchers.containsString("Content-Type"))));
+    }
+
+    @Test
     @DisplayName("actual GET request from allowed origin echoes Access-Control-Allow-Origin")
     void actualRequest_fromAllowedOrigin_echoesAllowOrigin() throws Exception {
         mockMvc.perform(get("/api/v1/products")

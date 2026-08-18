@@ -1,26 +1,29 @@
 spring:
-  application:
-    name: banhangtructuyen
-  jackson:
-    time-zone: Asia/Ho_Chi_Minh
+  datasource:
+    url: ${ORACLE_URL:jdbc:oracle:thin:@localhost:1522/XEPDB1}
+    username: ${ORACLE_USER}
+    password: ${ORACLE_PASSWORD}
   jpa:
-    open-in-view: false
+    hibernate:
+      ddl-auto: validate
     properties:
       hibernate:
-        format_sql: true
+        dialect: org.hibernate.dialect.OracleDialect
+        type:
+          preferred_instant_jdbc_type: TIMESTAMP
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
 
 app:
-  redis:
-    ttl:
-      product-list: 300
-      product-detail: 600
   security:
     jwt:
       jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://localhost:8081/realms/shoponline/protocol/openid-connect/certs}
       issuer: ${KEYCLOAK_ISSUER:http://localhost:8081/realms/shoponline}
       audience: ${KEYCLOAK_AUDIENCE:shoponline-backend}
     cors:
-      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
+      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}
   keycloak:
     admin:
       base-url: ${KEYCLOAK_ADMIN_BASE_URL:http://localhost:8081}
@@ -29,9 +32,3 @@ app:
       client-secret: ${KEYCLOAK_USER_ADMIN_CLIENT_SECRET:}
       backend-client-id: ${KEYCLOAK_BACKEND_CLIENT_ID:shoponline-backend}
       customer-role: ${KEYCLOAK_CUSTOMER_ROLE:CUSTOMER}
-
-springdoc:
-  api-docs:
-    path: /api-docs
-  swagger-ui:
-    path: /swagger-ui.html
