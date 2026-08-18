@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useCartStore } from '../store/cartStore';
 import { useAuthStore } from '../store/authStore';
@@ -8,31 +7,26 @@ import type { Product } from '../types';
 interface Props { product: Product; }
 
 export default function ProductCard({ product }: Props) {
-  const { addItem } = useCartStore();
+  const addItem = useCartStore((state) => state.addItem);
+  const cartItem = useCartStore((state) => state.items.find((item) => item.productId === product.id));
   const { isAuthenticated } = useAuthStore();
-  const [localInventory, setLocalInventory] = useState(product.inventoryCount);
-
-  useEffect(() => {
-    setLocalInventory(product.inventoryCount);
-  }, [product.inventoryCount]);
 
   const handleAddToCart = async (e: React.MouseEvent) => {
     e.preventDefault();
     if (!isAuthenticated) { toast.error('Vui lòng đăng nhập để thêm vào giỏ hàng'); return; }
-    if (localInventory === 0) { toast.error('Sản phẩm tạm hết hàng'); return; }
+    if (product.inventoryCount === 0) { toast.error('Sản phẩm tạm hết hàng'); return; }
     try {
       await addItem(product.id, 1);
       toast.success(`Đã thêm "${product.name}" vào giỏ hàng! 🛍️`);
-      setLocalInventory(prev => Math.max(0, prev - 1));
     } catch (err: any) { 
       const msg = err?.response?.data?.message || '';
       if (msg.toLowerCase().includes('hết hàng') || msg.toLowerCase().includes('không đủ') || msg.toLowerCase().includes('enough')) {
-        setLocalInventory(0);
+        toast.error('Không thể thêm sản phẩm vào giỏ hàng');
       }
     }
   };
 
-  const isOutOfStock = localInventory === 0;
+  const isOutOfStock = product.inventoryCount === 0;
 
   return (
     <Link to={`/products/${product.id}`} className="fade-in">
@@ -85,11 +79,11 @@ export default function ProductCard({ product }: Props) {
               fontWeight: 700,
               padding: '2px 8px',
               borderRadius: '12px',
-              background: isOutOfStock ? 'rgba(239, 68, 68, 0.15)' : localInventory < 10 ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)',
-              color: isOutOfStock ? 'var(--danger)' : localInventory < 10 ? 'var(--warning)' : 'var(--success)',
-              border: `1px solid ${isOutOfStock ? 'rgba(239, 68, 68, 0.3)' : localInventory < 10 ? 'rgba(245, 158, 11, 0.3)' : 'rgba(16, 185, 129, 0.3)'}`
+              background: isOutOfStock ? 'rgba(239, 68, 68, 0.15)' : product.inventoryCount < 10 ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+              color: isOutOfStock ? 'var(--danger)' : product.inventoryCount < 10 ? 'var(--warning)' : 'var(--success)',
+              border: `1px solid ${isOutOfStock ? 'rgba(239, 68, 68, 0.3)' : product.inventoryCount < 10 ? 'rgba(245, 158, 11, 0.3)' : 'rgba(16, 185, 129, 0.3)'}`
             }}>
-              {isOutOfStock ? 'Hết hàng' : `Còn ${localInventory}`}
+              {isOutOfStock ? 'Hết hàng' : `Còn ${product.inventoryCount}`}
             </span>
           </div>
 
@@ -101,6 +95,14 @@ export default function ProductCard({ product }: Props) {
           >
             {isOutOfStock ? 'Hết hàng' : '+ Thêm vào giỏ'}
           </button>
+          {cartItem && (
+            <span
+              aria-label={`cart quantity for ${product.name}`}
+              style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', fontWeight: 600, textAlign: 'center' }}
+            >
+              Trong giỏ: {cartItem.quantity}
+            </span>
+          )}
         </div>
       </div>
     </Link>

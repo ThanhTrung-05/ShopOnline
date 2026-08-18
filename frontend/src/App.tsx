@@ -5,6 +5,7 @@ import apiClient from './api/axios';
 import ProductsPage from './pages/ProductsPage';
 import ProductDetailPage from './pages/ProductDetailPage';
 import { useAuthStore } from './store/authStore';
+import { useCartStore } from './store/cartStore';
 
 interface SessionData {
   authenticated: boolean;
@@ -22,10 +23,13 @@ function SessionBar() {
       setSession(null);
       setSessionError(null);
       useAuthStore.getState().logout();
+      useCartStore.getState().clearLocal();
       return;
     }
 
     useAuthStore.getState().login(username ?? 'customer');
+    useCartStore.getState().clearLocal();
+    void useCartStore.getState().loadCart();
 
     apiClient
       .get<{ data: SessionData }>('/auth/session')
