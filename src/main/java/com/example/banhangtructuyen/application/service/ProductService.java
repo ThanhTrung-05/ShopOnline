@@ -5,9 +5,12 @@ import com.example.banhangtructuyen.application.dto.product.ProductRequest;
 import com.example.banhangtructuyen.application.dto.product.ProductResponse;
 import org.springframework.data.domain.Page;
 
+import java.math.BigDecimal;
+
 public interface ProductService {
 
-    Page<ProductResponse> findAll(int page, int size, Long categoryId, String search);
+    Page<ProductResponse> findAll(int page, int size, Long categoryId, String search,
+                                  BigDecimal minPrice, BigDecimal maxPrice);
 
     /** Returns basic product info — used by ATS-2 product list. */
     ProductResponse findById(Long productId);

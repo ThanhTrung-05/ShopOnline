@@ -23,9 +23,16 @@ export interface ProductDetail {
 }
 
 export const productApi = {
-  list: (page = 0, size = 20, category?: string, search?: string) =>
+  list: (
+    page = 0,
+    size = 20,
+    category?: string,
+    search?: string,
+    minPrice?: number,
+    maxPrice?: number,
+  ) =>
     apiClient.get<ApiResponse<PageResponse<Product>>>('/products', {
-      params: { page, size, category, search },
+      params: { page, size, category, search, minPrice, maxPrice },
     }),
 
   detail: (id: number) =>

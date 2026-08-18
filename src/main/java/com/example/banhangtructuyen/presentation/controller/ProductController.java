@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
@@ -20,6 +21,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+
+import java.math.BigDecimal;
 
 /**
  * Public REST controller for the product catalog.
@@ -71,9 +74,15 @@ public class ProductController {
             @RequestParam(required = false) @Min(value = 1, message = "Category ID must be at least 1") Long categoryId,
 
             @Parameter(description = "Keyword to search in product name (case-insensitive)", example = "gạo")
-            @RequestParam(required = false) @Size(max = 100, message = "Search keyword must not exceed 100 characters") String search) {
+            @RequestParam(required = false) @Size(max = 100, message = "Search keyword must not exceed 100 characters") String search,
 
-        final Page<ProductResponse> result = productService.findAll(page, size, categoryId, search);
+            @Parameter(description = "Minimum price filter (inclusive)", example = "10000")
+            @RequestParam(required = false) @DecimalMin(value = "0", message = "Minimum price must be 0 or greater") BigDecimal minPrice,
+
+            @Parameter(description = "Maximum price filter (inclusive)", example = "500000")
+            @RequestParam(required = false) @DecimalMin(value = "0", message = "Maximum price must be 0 or greater") BigDecimal maxPrice) {
+
+        final Page<ProductResponse> result = productService.findAll(page, size, categoryId, search, minPrice, maxPrice);
         return ResponseEntity.ok(com.example.banhangtructuyen.application.dto.ApiResponse.success(result));
     }
 

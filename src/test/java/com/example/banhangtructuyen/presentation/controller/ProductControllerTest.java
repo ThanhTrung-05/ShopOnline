@@ -79,7 +79,7 @@ class ProductControllerTest {
         @DisplayName("200 — default pagination, returns product list")
         void listProducts_shouldReturn200_withDefaultPagination() throws Exception {
             // Arrange
-            when(productService.findAll(0, 20, null, null))
+            when(productService.findAll(0, 20, null, null, null, null))
                     .thenReturn(singleProductPage(sampleProduct()));
 
             // Act + Assert
@@ -103,7 +103,7 @@ class ProductControllerTest {
         @DisplayName("200 — filtered by category ID")
         void listProducts_shouldReturn200_withCategoryFilter() throws Exception {
             // Arrange
-            when(productService.findAll(0, 20, 1L, null))
+            when(productService.findAll(0, 20, 1L, null, null, null))
                     .thenReturn(singleProductPage(sampleProduct()));
 
             // Act + Assert
@@ -118,7 +118,7 @@ class ProductControllerTest {
         @DisplayName("200 — filtered by search keyword")
         void listProducts_shouldReturn200_withSearchKeyword() throws Exception {
             // Arrange
-            when(productService.findAll(0, 20, null, "gạo"))
+            when(productService.findAll(0, 20, null, "gạo", null, null))
                     .thenReturn(singleProductPage(sampleProduct()));
 
             // Act + Assert
@@ -135,7 +135,7 @@ class ProductControllerTest {
             // Arrange
             final Page<ProductResponse> emptyPage = new PageImpl<>(
                     Collections.emptyList(), PageRequest.of(0, 20), 0L);
-            when(productService.findAll(0, 20, 2L, "nonexistent"))
+            when(productService.findAll(0, 20, 2L, "nonexistent", null, null))
                     .thenReturn(emptyPage);
 
             // Act + Assert

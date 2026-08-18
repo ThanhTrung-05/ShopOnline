@@ -17,23 +17,32 @@ export default function ProductsPage() {
   const [category, setCategory] = useState('');
   const [search, setSearch]     = useState('');
   const [searchInput, setSearchInput] = useState('');
+  const [minPrice, setMinPrice] = useState<number | undefined>(undefined);
+  const [maxPrice, setMaxPrice] = useState<number | undefined>(undefined);
+  const [minPriceInput, setMinPriceInput] = useState('');
+  const [maxPriceInput, setMaxPriceInput] = useState('');
 
-  const load = useCallback(async (p: number, cat: string, q: string) => {
+  const load = useCallback(async (
+    p: number, cat: string, q: string, min?: number, max?: number,
+  ) => {
     setLoading(true);
     try {
-      const res = await productApi.list(p, 20, cat || undefined, q || undefined);
+      const res = await productApi.list(p, 20, cat || undefined, q || undefined, min, max);
       setData(res.data.data);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => { load(page, category, search); }, [page, category, search]);
+  useEffect(() => { load(page, category, search, minPrice, maxPrice); },
+    [page, category, search, minPrice, maxPrice]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     setPage(0);
     setSearch(searchInput);
+    setMinPrice(minPriceInput ? Number(minPriceInput) : undefined);
+    setMaxPrice(maxPriceInput ? Number(maxPriceInput) : undefined);
   };
 
   return (
@@ -47,10 +56,14 @@ export default function ProductsPage() {
           <p style={{ color: 'var(--text-secondary)', maxWidth: 480, margin: '0 auto', fontSize: '0.9rem' }}>Hàng nghìn sản phẩm chính hãng, giao hàng nhanh, giá tốt nhất</p>
         </div>
 
-        {/* Search */}
-        <form onSubmit={handleSearch} style={{ display: 'flex', gap: 12, maxWidth: 560, margin: '0 auto 32px' }}>
+        {/* Search + price range */}
+        <form onSubmit={handleSearch} style={{ display: 'flex', gap: 12, flexWrap: 'wrap', maxWidth: 720, margin: '0 auto 32px', justifyContent: 'center' }}>
           <input className="form-input" placeholder="🔍 Tìm kiếm sản phẩm..."
-            value={searchInput} onChange={(e) => setSearchInput(e.target.value)} style={{ flex: 1 }} />
+            value={searchInput} onChange={(e) => setSearchInput(e.target.value)} style={{ flex: '1 1 240px', minWidth: 200 }} />
+          <input className="form-input" type="number" min={0} placeholder="Giá từ"
+            value={minPriceInput} onChange={(e) => setMinPriceInput(e.target.value)} style={{ width: 120 }} />
+          <input className="form-input" type="number" min={0} placeholder="Giá đến"
+            value={maxPriceInput} onChange={(e) => setMaxPriceInput(e.target.value)} style={{ width: 120 }} />
           <button type="submit" className="btn btn-primary">Tìm</button>
         </form>
 

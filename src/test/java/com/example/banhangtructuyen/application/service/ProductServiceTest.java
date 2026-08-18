@@ -284,14 +284,14 @@ class ProductServiceTest {
         @DisplayName("Cache HIT — returns cached page without touching DB")
         void findAll_cacheHit_returnsPageFromCache() throws Exception {
             // Arrange
-            final String cacheKey = CacheKeys.productList(0, 20, null, null);
+            final String cacheKey = CacheKeys.productList(0, 20, null, null, null, null);
             final String cachedJson = objectMapper.writeValueAsString(
                     Map.of("content", List.of(productResponse), "total", 1L));
 
             when(valueOps.get(cacheKey)).thenReturn(cachedJson);
 
             // Act
-            final Page<ProductResponse> result = productService.findAll(0, 20, null, null);
+            final Page<ProductResponse> result = productService.findAll(0, 20, null, null, null, null);
 
             // Assert
             assertThat(result).isNotNull();
@@ -307,16 +307,16 @@ class ProductServiceTest {
         @DisplayName("Cache MISS — queries DB, maps results, writes cache")
         void findAll_cacheMiss_queriesDBAndWritesCache() {
             // Arrange
-            final String cacheKey = CacheKeys.productList(0, 20, 1L, null);
+            final String cacheKey = CacheKeys.productList(0, 20, 1L, null, null, null);
             final Page<Product> dbPage = new PageImpl<>(List.of(activeProduct),
                     PageRequest.of(0, 20), 1L);
 
             when(valueOps.get(cacheKey)).thenReturn(null);
-            when(productRepository.findActiveProducts(eq(1L), isNull(), any()))
+            when(productRepository.findActiveProducts(eq(1L), isNull(), isNull(), isNull(), any()))
                     .thenReturn(dbPage);
 
             // Act
-            final Page<ProductResponse> result = productService.findAll(0, 20, 1L, null);
+            final Page<ProductResponse> result = productService.findAll(0, 20, 1L, null, null, null);
 
             // Assert
             assertThat(result).isNotNull();
@@ -339,11 +339,11 @@ class ProductServiceTest {
                     List.of(activeProduct), PageRequest.of(0, 20), 1L);
 
             when(valueOps.get(anyString())).thenThrow(new RuntimeException("Redis connection refused"));
-            when(productRepository.findActiveProducts(isNull(), isNull(), any()))
+            when(productRepository.findActiveProducts(isNull(), isNull(), isNull(), isNull(), any()))
                     .thenReturn(dbPage);
 
             // Act — must NOT throw
-            final Page<ProductResponse> result = productService.findAll(0, 20, null, null);
+            final Page<ProductResponse> result = productService.findAll(0, 20, null, null, null, null);
 
             // Assert
             assertThat(result).isNotNull();
@@ -357,11 +357,11 @@ class ProductServiceTest {
             final Page<Product> emptyPage = Page.empty(PageRequest.of(0, 20));
 
             when(valueOps.get(anyString())).thenReturn(null);
-            when(productRepository.findActiveProducts(isNull(), isNull(), any()))
+            when(productRepository.findActiveProducts(isNull(), isNull(), isNull(), isNull(), any()))
                     .thenReturn(emptyPage);
 
             // Act
-            final Page<ProductResponse> result = productService.findAll(0, 20, null, null);
+            final Page<ProductResponse> result = productService.findAll(0, 20, null, null, null, null);
 
             // Assert
             assertThat(result.getContent()).isEmpty();

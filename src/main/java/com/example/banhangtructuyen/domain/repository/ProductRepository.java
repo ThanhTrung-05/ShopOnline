@@ -18,9 +18,13 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             WHERE p.status = 'ACTIVE'
               AND (:categoryId IS NULL OR c.categoryId = :categoryId)
               AND (:search IS NULL OR UPPER(p.productName) LIKE UPPER(CONCAT('%', :search, '%')))
+              AND (:minPrice IS NULL OR p.price >= :minPrice)
+              AND (:maxPrice IS NULL OR p.price <= :maxPrice)
             """)
     Page<Product> findActiveProducts(@Param("categoryId") Long categoryId,
                                      @Param("search") String search,
+                                     @Param("minPrice") java.math.BigDecimal minPrice,
+                                     @Param("maxPrice") java.math.BigDecimal maxPrice,
                                      Pageable pageable);
 
     @Query("""

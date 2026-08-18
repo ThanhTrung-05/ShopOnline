@@ -48,8 +48,9 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public Page<ProductResponse> findAll(final int page, final int size,
-                                         final Long categoryId, final String search) {
-        final String cacheKey = CacheKeys.productList(page, size, categoryId, search);
+                                         final Long categoryId, final String search,
+                                         final BigDecimal minPrice, final BigDecimal maxPrice) {
+        final String cacheKey = CacheKeys.productList(page, size, categoryId, search, minPrice, maxPrice);
         final int ttl = appProperties.getRedis().getTtl().getProductList();
 
         // Cache-Aside: try cache first
@@ -72,7 +73,7 @@ public class ProductServiceImpl implements ProductService {
         log.debug("Cache MISS: {}", cacheKey);
         final Pageable pageable = PageRequest.of(page, size);
         final Page<Product> productPage = productRepository
-                .findActiveProducts(categoryId, search, pageable);
+                .findActiveProducts(categoryId, search, minPrice, maxPrice, pageable);
         final Page<ProductResponse> result = productPage.map(this::toResponse);
 
         // Populate cache
