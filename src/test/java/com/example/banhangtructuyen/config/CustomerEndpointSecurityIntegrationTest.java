@@ -208,14 +208,14 @@ class CustomerEndpointSecurityIntegrationTest {
     @DisplayName("CORS preflight allows PUT and DELETE")
     void corsPreflight_allowsPutAndDelete() throws Exception {
         mockMvc.perform(options("/api/v1/cart/items/1")
-                        .header(HttpHeaders.ORIGIN, "http://localhost:3000")
+                        .header(HttpHeaders.ORIGIN, "http://localhost:5173")
                         .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "PUT"))
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_METHODS,
                         org.hamcrest.Matchers.containsString("PUT")));
 
         mockMvc.perform(options("/api/v1/cart/items/1")
-                        .header(HttpHeaders.ORIGIN, "http://localhost:3000")
+                        .header(HttpHeaders.ORIGIN, "http://localhost:5173")
                         .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "DELETE"))
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_METHODS,
