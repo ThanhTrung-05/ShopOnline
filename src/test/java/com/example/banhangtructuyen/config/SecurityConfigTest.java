@@ -17,8 +17,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Verifies the CORS configuration added for ATS-21 SESSION (frontend at
- * {@code http://localhost:3000} calling the resource server cross-origin).
+ * Verifies the Spring Security CORS configuration used by browser frontends.
  *
  * <p>{@link JwtDecoder} is mocked so no Keycloak/JWKS network call happens.
  */
@@ -28,6 +27,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @DisplayName("CORS configuration")
 class SecurityConfigTest {
 
+    private static final String LOCAL_FRONTEND_ORIGIN = "http://localhost:5173";
+    private static final String CONFIGURED_ORIGIN = "http://configured.example.com";
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -35,27 +37,49 @@ class SecurityConfigTest {
     private JwtDecoder jwtDecoder;
 
     @Test
-    @DisplayName("preflight OPTIONS from allowed origin is accepted with Access-Control-Allow-Origin")
-    void preflight_fromAllowedOrigin_isAccepted() throws Exception {
+    @DisplayName("preflight OPTIONS from localhost 5173 is accepted")
+    void preflight_fromLocalhost5173_isAccepted() throws Exception {
         mockMvc.perform(options("/api/v1/auth/session")
-                        .header(HttpHeaders.ORIGIN, "http://localhost:3000")
+                        .header(HttpHeaders.ORIGIN, LOCAL_FRONTEND_ORIGIN)
                         .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "GET")
                         .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "Authorization"))
                 .andExpect(status().isOk())
-                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:3000"));
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, LOCAL_FRONTEND_ORIGIN));
     }
 
     @Test
-    @DisplayName("cart add-item preflight from Vite dev origin allows POST and required headers")
-    void cartAddItemPreflight_fromViteDevOrigin_allowsPostAndRequiredHeaders() throws Exception {
+    @DisplayName("preflight OPTIONS from configured origin is accepted")
+    void preflight_fromConfiguredOrigin_isAccepted() throws Exception {
         mockMvc.perform(options("/api/v1/cart/items")
-                        .header(HttpHeaders.ORIGIN, "http://localhost:5173")
+                        .header(HttpHeaders.ORIGIN, CONFIGURED_ORIGIN)
                         .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST")
                         .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "Authorization, Content-Type"))
                 .andExpect(status().isOk())
-                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:5173"))
-                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_METHODS,
-                        org.hamcrest.Matchers.containsString("POST")))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, CONFIGURED_ORIGIN));
+    }
+
+    @Test
+    @DisplayName("preflight allows required methods")
+    void preflight_allowsRequiredMethods() throws Exception {
+        for (final String method : new String[] {"GET", "POST", "PUT", "DELETE", "OPTIONS"}) {
+            mockMvc.perform(options("/api/v1/cart/items")
+                            .header(HttpHeaders.ORIGIN, LOCAL_FRONTEND_ORIGIN)
+                            .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, method)
+                            .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "Authorization"))
+                    .andExpect(status().isOk())
+                    .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_METHODS,
+                            org.hamcrest.Matchers.containsString(method)));
+        }
+    }
+
+    @Test
+    @DisplayName("preflight allows Authorization and Content-Type headers")
+    void preflight_allowsRequiredHeaders() throws Exception {
+        mockMvc.perform(options("/api/v1/cart/items")
+                        .header(HttpHeaders.ORIGIN, LOCAL_FRONTEND_ORIGIN)
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "Authorization, Content-Type"))
+                .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS,
                         org.hamcrest.Matchers.allOf(
                                 org.hamcrest.Matchers.containsString("Authorization"),
@@ -66,8 +90,8 @@ class SecurityConfigTest {
     @DisplayName("actual GET request from allowed origin echoes Access-Control-Allow-Origin")
     void actualRequest_fromAllowedOrigin_echoesAllowOrigin() throws Exception {
         mockMvc.perform(get("/api/v1/products")
-                        .header(HttpHeaders.ORIGIN, "http://localhost:3000"))
-                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:3000"));
+                        .header(HttpHeaders.ORIGIN, LOCAL_FRONTEND_ORIGIN))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, LOCAL_FRONTEND_ORIGIN));
     }
 
     @Test
@@ -81,10 +105,10 @@ class SecurityConfigTest {
     }
 
     @Test
-    @DisplayName("Access-Control-Allow-Credentials is absent — Bearer auth, no cookies")
+    @DisplayName("Access-Control-Allow-Credentials is absent for Bearer auth")
     void response_doesNotAllowCredentials() throws Exception {
         mockMvc.perform(options("/api/v1/auth/session")
-                        .header(HttpHeaders.ORIGIN, "http://localhost:3000")
+                        .header(HttpHeaders.ORIGIN, LOCAL_FRONTEND_ORIGIN)
                         .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "GET")
                         .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "Authorization"))
                 .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS));
