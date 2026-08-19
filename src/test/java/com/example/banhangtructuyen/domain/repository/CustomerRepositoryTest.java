@@ -85,4 +85,23 @@ class CustomerRepositoryTest {
         assertThat(saved.getStatus()).isEqualTo(Customer.CustomerStatus.ACTIVE);
         assertThat(saved.getPasswordHash()).isEqualTo("$2a$12$hashedvalue");
     }
+
+    @Test
+    @DisplayName("findByKeycloakUserId — returns customer when keycloakUserId exists")
+    void findByKeycloakUserId_shouldReturnCustomer_whenExists() {
+        final Customer customer = sampleCustomer("kc-linked@example.com");
+        customer.setKeycloakUserId("f47ac10b-58cc-4372-a567-0e02b2c3d479");
+        customerRepository.save(customer);
+
+        assertThat(customerRepository.findByKeycloakUserId("f47ac10b-58cc-4372-a567-0e02b2c3d479"))
+                .isPresent()
+                .get()
+                .satisfies(c -> assertThat(c.getEmail()).isEqualTo("kc-linked@example.com"));
+    }
+
+    @Test
+    @DisplayName("findByKeycloakUserId — returns empty when keycloakUserId does not exist")
+    void findByKeycloakUserId_shouldReturnEmpty_whenNotFound() {
+        assertThat(customerRepository.findByKeycloakUserId("no-such-subject")).isEmpty();
+    }
 }

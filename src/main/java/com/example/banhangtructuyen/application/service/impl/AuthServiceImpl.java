@@ -3,6 +3,7 @@ package com.example.banhangtructuyen.application.service.impl;
 import com.example.banhangtructuyen.application.dto.auth.RegisterRequest;
 import com.example.banhangtructuyen.application.dto.auth.RegisterResponse;
 import com.example.banhangtructuyen.application.service.AuthService;
+import com.example.banhangtructuyen.application.service.KeycloakAdminService;
 import com.example.banhangtructuyen.domain.exception.EmailAlreadyExistsException;
 import com.example.banhangtructuyen.domain.model.Customer;
 import com.example.banhangtructuyen.domain.repository.CustomerRepository;
@@ -18,6 +19,7 @@ public class AuthServiceImpl implements AuthService {
 
     private final CustomerRepository customerRepository;
     private final PasswordEncoder passwordEncoder;
+    private final KeycloakAdminService keycloakAdminService;
 
     @Override
     public RegisterResponse register(final RegisterRequest request) {
@@ -25,25 +27,38 @@ public class AuthServiceImpl implements AuthService {
             throw new EmailAlreadyExistsException(request.email());
         }
 
-        final Customer customer = Customer.builder()
-                .email(request.email())
-                .fullName(request.fullName())
-                .phone(request.phone())
-                .passwordHash(passwordEncoder.encode(request.password()))
-                .status(Customer.CustomerStatus.ACTIVE)
-                .role(Customer.CustomerRole.USER)
-                .build();
+        String keycloakUserId = null;
+        try {
+            keycloakUserId = keycloakAdminService.createUser(request.email(), request.fullName());
+            keycloakAdminService.setPassword(keycloakUserId, request.password());
+            keycloakAdminService.assignCustomerRole(keycloakUserId);
 
-        final Customer saved = customerRepository.save(customer);
+            final Customer customer = Customer.builder()
+                    .email(request.email())
+                    .fullName(request.fullName())
+                    .phone(request.phone())
+                    .passwordHash(passwordEncoder.encode(request.password()))
+                    .keycloakUserId(keycloakUserId)
+                    .status(Customer.CustomerStatus.ACTIVE)
+                    .role(Customer.CustomerRole.USER)
+                    .build();
 
-        return new RegisterResponse(
-                saved.getCustomerId(),
-                saved.getEmail(),
-                saved.getFullName(),
-                saved.getPhone(),
-                saved.getRole().name(),
-                saved.getStatus().name(),
-                saved.getCreatedAt()
-        );
+            final Customer saved = customerRepository.save(customer);
+
+            return new RegisterResponse(
+                    saved.getCustomerId(),
+                    saved.getEmail(),
+                    saved.getFullName(),
+                    saved.getPhone(),
+                    saved.getRole().name(),
+                    saved.getStatus().name(),
+                    saved.getCreatedAt()
+            );
+        } catch (final RuntimeException ex) {
+            if (keycloakUserId != null) {
+                keycloakAdminService.deleteUser(keycloakUserId);
+            }
+            throw ex;
+        }
     }
 }

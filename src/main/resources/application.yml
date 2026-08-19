@@ -14,6 +14,21 @@ app:
     ttl:
       product-list: 300
       product-detail: 600
+  security:
+    jwt:
+      jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://localhost:8081/realms/shoponline/protocol/openid-connect/certs}
+      issuer: ${KEYCLOAK_ISSUER:http://localhost:8081/realms/shoponline}
+      audience: ${KEYCLOAK_AUDIENCE:shoponline-backend}
+    cors:
+      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  keycloak:
+    admin:
+      base-url: ${KEYCLOAK_ADMIN_BASE_URL:http://localhost:8081}
+      realm: ${KEYCLOAK_REALM:shoponline}
+      client-id: ${KEYCLOAK_USER_ADMIN_CLIENT_ID:shoponline-user-admin}
+      client-secret: ${KEYCLOAK_USER_ADMIN_CLIENT_SECRET:}
+      backend-client-id: ${KEYCLOAK_BACKEND_CLIENT_ID:shoponline-backend}
+      customer-role: ${KEYCLOAK_CUSTOMER_ROLE:CUSTOMER}
 
 springdoc:
   api-docs:

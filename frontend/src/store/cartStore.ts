@@ -1,51 +1,72 @@
 import { create } from 'zustand';
-
-export interface CartItem {
-  productId: number;
-  quantity: number;
-}
+import { cartApi, emptyCart, type CartItem } from '../api/cartApi';
 
 interface CartState {
   items: CartItem[];
+  subtotal: number;
+  isLoading: boolean;
+  error: string | null;
+  loadCart: () => Promise<void>;
   addItem: (productId: number, quantity: number) => Promise<void>;
-  removeItem: (productId: number) => void;
-  clear: () => void;
+  updateItemQuantity: (cartItemId: number, quantity: number) => Promise<void>;
+  removeItem: (cartItemId: number) => Promise<void>;
+  clearLocal: () => void;
 }
 
-const STORAGE_KEY = 'shoponline_cart';
+const LEGACY_STORAGE_KEY = 'shoponline_cart';
 
-function loadCart(): CartItem[] {
+function clearLegacyCartStorage() {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]');
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
   } catch {
-    return [];
+    // Ignore storage failures; backend cart remains the source of truth.
   }
 }
 
-function saveCart(items: CartItem[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-}
-
 export const useCartStore = create<CartState>((set, get) => ({
-  items: loadCart(),
-  addItem: async (productId, quantity) => {
-    const items = [...get().items];
-    const existing = items.find((i) => i.productId === productId);
-    if (existing) {
-      existing.quantity += quantity;
-    } else {
-      items.push({ productId, quantity });
+  items: [],
+  subtotal: 0,
+  isLoading: false,
+  error: null,
+
+  loadCart: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await cartApi.get();
+      const cart = response.data.data ?? emptyCart;
+      set({
+        items: cart.items,
+        subtotal: cart.subtotal,
+        isLoading: false,
+        error: null,
+      });
+    } catch {
+      set({
+        items: [],
+        subtotal: 0,
+        isLoading: false,
+        error: 'Unable to load cart.',
+      });
     }
-    saveCart(items);
-    set({ items });
   },
-  removeItem: (productId) => {
-    const items = get().items.filter((i) => i.productId !== productId);
-    saveCart(items);
-    set({ items });
+
+  addItem: async (productId, quantity) => {
+    await cartApi.addItem({ productId, quantity });
+    await get().loadCart();
   },
-  clear: () => {
-    saveCart([]);
-    set({ items: [] });
+
+  updateItemQuantity: async (cartItemId, quantity) => {
+    await cartApi.updateItemQuantity(cartItemId, { quantity });
+    await get().loadCart();
+  },
+
+  removeItem: async (cartItemId) => {
+    await cartApi.removeItem(cartItemId);
+    await get().loadCart();
+  },
+
+  clearLocal: () => {
+    clearLegacyCartStorage();
+    set({ items: [], subtotal: 0, isLoading: false, error: null });
   },
 }));
