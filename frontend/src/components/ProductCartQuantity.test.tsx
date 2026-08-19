@@ -4,6 +4,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ProductCard from './ProductCard';
 import ProductDetailPage from '../pages/ProductDetailPage';
 import { useAuthStore } from '../store/authStore';
+import toast from 'react-hot-toast';
+import {
+  INSUFFICIENT_STOCK_BACKEND_MESSAGE,
+  INSUFFICIENT_STOCK_WARNING,
+} from '../utils/cartErrorMessages';
 
 vi.mock('react-hot-toast', () => ({
   default: {
@@ -62,6 +67,16 @@ function cart(quantity: number) {
   };
 }
 
+function stockError() {
+  return {
+    response: {
+      data: {
+        message: INSUFFICIENT_STOCK_BACKEND_MESSAGE,
+      },
+    },
+  };
+}
+
 function renderCard() {
   return render(
     <MemoryRouter>
@@ -93,6 +108,8 @@ describe('product cart quantity display', () => {
     vi.mocked(cartApi.updateItemQuantity).mockReset();
     vi.mocked(cartApi.removeItem).mockReset();
     vi.mocked(productApi.detail).mockReset();
+    vi.mocked(toast.error).mockClear();
+    vi.mocked(toast.success).mockClear();
     localStorage.clear();
     useAuthStore.getState().login('customer-a');
     useCartStore.getState().clearLocal();
@@ -228,6 +245,73 @@ describe('product cart quantity display', () => {
     await renderDetail();
 
     expect(screen.getByLabelText('cart quantity for Rice')).toHaveTextContent('5');
+    expect(screen.getByText(/Còn 20 sản phẩm/)).toBeInTheDocument();
+  });
+});
+
+describe('ATS-12 stock warning behavior', () => {
+  beforeEach(() => {
+    vi.mocked(cartApi.get).mockReset();
+    vi.mocked(cartApi.addItem).mockReset();
+    vi.mocked(cartApi.updateItemQuantity).mockReset();
+    vi.mocked(cartApi.removeItem).mockReset();
+    vi.mocked(productApi.detail).mockReset();
+    vi.mocked(toast.error).mockClear();
+    vi.mocked(toast.success).mockClear();
+    localStorage.clear();
+    useAuthStore.getState().login('customer-a');
+    useCartStore.getState().clearLocal();
+  });
+
+  it('shows stock warning after rejected add while old cart quantity and stock remain unchanged', async () => {
+    useCartStore.setState({ items: cart(20).items, subtotal: cart(20).subtotal });
+    vi.mocked(cartApi.addItem).mockRejectedValue(stockError());
+
+    renderCard();
+    expect(screen.getByLabelText('cart quantity for Rice')).toHaveTextContent('20');
+    expect(screen.getByText('Còn 20')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '+ Thêm vào giỏ' }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(INSUFFICIENT_STOCK_WARNING));
+    expect(screen.getByLabelText('cart quantity for Rice')).toHaveTextContent('20');
+    expect(screen.getByText('Còn 20')).toBeInTheDocument();
+    expect(cartApi.get).not.toHaveBeenCalled();
+  });
+
+  it('shows stock warning after rejected update while old cart quantity and stock remain unchanged', async () => {
+    useCartStore.setState({ items: cart(19).items, subtotal: cart(19).subtotal });
+    vi.mocked(cartApi.updateItemQuantity).mockRejectedValue(stockError());
+
+    await renderDetail();
+    expect(screen.getByLabelText('cart quantity for Rice')).toHaveTextContent('19');
+    expect(screen.getByText(/Còn 20 sản phẩm/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '+' }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(INSUFFICIENT_STOCK_WARNING));
+    expect(screen.getByLabelText('cart quantity for Rice')).toHaveTextContent('19');
+    expect(screen.getByText(/Còn 20 sản phẩm/)).toBeInTheDocument();
+    expect(cartApi.get).not.toHaveBeenCalled();
+  });
+
+  it('successful operation after stock warning updates quantity without another stale warning', async () => {
+    useCartStore.setState({ items: cart(19).items, subtotal: cart(19).subtotal });
+    vi.mocked(cartApi.updateItemQuantity)
+      .mockRejectedValueOnce(stockError())
+      .mockResolvedValueOnce({} as any);
+    vi.mocked(cartApi.get).mockResolvedValue({ data: { data: cart(20) } } as any);
+
+    await renderDetail();
+
+    fireEvent.click(screen.getByRole('button', { name: '+' }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(INSUFFICIENT_STOCK_WARNING));
+    expect(screen.getByLabelText('cart quantity for Rice')).toHaveTextContent('19');
+
+    fireEvent.click(screen.getByRole('button', { name: '+' }));
+
+    await waitFor(() => expect(screen.getByLabelText('cart quantity for Rice')).toHaveTextContent('20'));
+    expect(toast.error).toHaveBeenCalledTimes(1);
     expect(screen.getByText(/Còn 20 sản phẩm/)).toBeInTheDocument();
   });
 });

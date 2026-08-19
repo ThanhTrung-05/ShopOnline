@@ -162,6 +162,21 @@ class CartControllerTest {
     }
 
     @Test
+    @DisplayName("quantity over available stock returns 400")
+    void addItem_shouldReturn400_whenQuantityExceedsAvailableStock() throws Exception {
+        when(cartService.addItem(eq(SUBJECT), any(AddCartItemRequest.class)))
+                .thenThrow(new IllegalArgumentException("Requested quantity exceeds available stock"));
+
+        mockMvc.perform(post("/api/v1/cart/items")
+                        .with(customerJwt())
+                        .contentType("application/json")
+                        .content(toJson(new AddCartItemRequest(10L, 4))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Requested quantity exceeds available stock"));
+    }
+
+    @Test
     @DisplayName("Product not found or inactive returns 404")
     void addItem_shouldReturn404_whenProductNotFoundOrInactive() throws Exception {
         when(cartService.addItem(eq(SUBJECT), any(AddCartItemRequest.class)))
@@ -220,6 +235,21 @@ class CartControllerTest {
                         .content(toJson(new UpdateCartItemQuantityRequest(1001))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    @DisplayName("update quantity over available stock returns 400")
+    void updateItemQuantity_shouldReturn400_whenQuantityExceedsAvailableStock() throws Exception {
+        when(cartService.updateItemQuantity(eq(SUBJECT), eq(1L), any(UpdateCartItemQuantityRequest.class)))
+                .thenThrow(new IllegalArgumentException("Requested quantity exceeds available stock"));
+
+        mockMvc.perform(put("/api/v1/cart/items/1")
+                        .with(customerJwt())
+                        .contentType("application/json")
+                        .content(toJson(new UpdateCartItemQuantityRequest(6))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Requested quantity exceeds available stock"));
     }
 
     @Test

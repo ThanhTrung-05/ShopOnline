@@ -28,6 +28,7 @@ import java.util.List;
 public class CartServiceImpl implements CartService {
 
     private static final int MAX_QUANTITY = 1000;
+    private static final String INSUFFICIENT_STOCK_MESSAGE = "Requested quantity exceeds available stock";
 
     private final CartRepository cartRepository;
     private final CartItemRepository cartItemRepository;
@@ -58,20 +59,34 @@ public class CartServiceImpl implements CartService {
         final Customer customer = findCustomer(keycloakSubject);
         final Product product = productRepository.findActiveById(request.productId())
                 .orElseThrow(() -> new ResourceNotFoundException("Product", request.productId()));
-        final Cart cart = cartRepository.findByCustomerId(customer.getCustomerId())
-                .orElseGet(() -> cartRepository.save(Cart.builder()
-                        .customerId(customer.getCustomerId())
-                        .build()));
+        final Cart cart = cartRepository.findByCustomerId(customer.getCustomerId()).orElse(null);
+        final CartItem existingItem = cart == null
+                ? null
+                : cartItemRepository.findByCart_CartIdAndProduct_ProductId(
+                        cart.getCartId(), product.getProductId()).orElse(null);
 
-        final CartItem item = cartItemRepository.findByCart_CartIdAndProduct_ProductId(
-                        cart.getCartId(), product.getProductId())
-                .map(existing -> incrementQuantity(existing, request.quantity()))
-                .orElseGet(() -> CartItem.builder()
-                        .cart(cart)
-                        .product(product)
-                        .quantity(request.quantity())
-                        .unitPrice(product.getPrice())
-                        .build());
+        final int resultingQuantity = existingItem == null
+                ? request.quantity()
+                : existingItem.getQuantity() + request.quantity();
+        validateQuantity(resultingQuantity, product);
+
+        final CartItem item;
+        if (existingItem != null) {
+            existingItem.setQuantity(resultingQuantity);
+            item = existingItem;
+        } else {
+            final Cart targetCart = cart != null
+                    ? cart
+                    : cartRepository.save(Cart.builder()
+                            .customerId(customer.getCustomerId())
+                            .build());
+            item = CartItem.builder()
+                    .cart(targetCart)
+                    .product(product)
+                    .quantity(request.quantity())
+                    .unitPrice(product.getPrice())
+                    .build();
+        }
 
         return toResponse(cartItemRepository.save(item));
     }
@@ -84,6 +99,7 @@ public class CartServiceImpl implements CartService {
         final Customer customer = findCustomer(keycloakSubject);
         final CartItem item = findOwnedCartItem(customer.getCustomerId(), cartItemId);
 
+        validateQuantity(request.quantity(), item.getProduct());
         item.setQuantity(request.quantity());
         return toResponse(cartItemRepository.save(item));
     }
@@ -106,13 +122,19 @@ public class CartServiceImpl implements CartService {
                 .orElseThrow(() -> new ResourceNotFoundException("CartItem", cartItemId));
     }
 
-    private static CartItem incrementQuantity(final CartItem item, final int quantityToAdd) {
-        final int resultingQuantity = item.getQuantity() + quantityToAdd;
-        if (resultingQuantity > MAX_QUANTITY) {
+    private static void validateQuantity(final int requestedQuantity, final Product product) {
+        if (requestedQuantity > MAX_QUANTITY) {
             throw new IllegalArgumentException("Cart item quantity must not exceed 1000");
         }
-        item.setQuantity(resultingQuantity);
-        return item;
+        if (requestedQuantity > availableStock(product)) {
+            throw new IllegalArgumentException(INSUFFICIENT_STOCK_MESSAGE);
+        }
+    }
+
+    private static int availableStock(final Product product) {
+        return product.getInventory() == null
+                ? 0
+                : product.getInventory().getAvailableQuantity();
     }
 
     private static CartItemResponse toResponse(final CartItem item) {

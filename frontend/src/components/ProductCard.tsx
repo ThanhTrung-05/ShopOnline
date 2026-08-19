@@ -3,6 +3,7 @@ import { useCartStore } from '../store/cartStore';
 import { useAuthStore } from '../store/authStore';
 import toast from 'react-hot-toast';
 import type { Product } from '../types';
+import { INSUFFICIENT_STOCK_WARNING, isInsufficientStockError } from '../utils/cartErrorMessages';
 
 interface Props { product: Product; }
 
@@ -18,7 +19,12 @@ export default function ProductCard({ product }: Props) {
     try {
       await addItem(product.id, 1);
       toast.success(`Đã thêm "${product.name}" vào giỏ hàng! 🛍️`);
-    } catch (err: any) { 
+    } catch (err: any) {
+      if (isInsufficientStockError(err)) {
+        toast.error(INSUFFICIENT_STOCK_WARNING);
+        return;
+      }
+
       const msg = err?.response?.data?.message || '';
       if (msg.toLowerCase().includes('hết hàng') || msg.toLowerCase().includes('không đủ') || msg.toLowerCase().includes('enough')) {
         toast.error('Không thể thêm sản phẩm vào giỏ hàng');

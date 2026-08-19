@@ -4,6 +4,7 @@ import { productApi, ProductDetail } from '../api/productApi';
 import { useCartStore } from '../store/cartStore';
 import { useAuthStore } from '../store/authStore';
 import toast from 'react-hot-toast';
+import { INSUFFICIENT_STOCK_WARNING, isInsufficientStockError } from '../utils/cartErrorMessages';
 
 export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -29,6 +30,14 @@ export default function ProductDetailPage() {
 
   const displayedQty = cartItem?.quantity ?? qty;
 
+  const showCartError = (err: unknown) => {
+    if (isInsufficientStockError(err)) {
+      toast.error(INSUFFICIENT_STOCK_WARNING);
+      return true;
+    }
+    return false;
+  };
+
   const handleAdd = async () => {
     if (!isAuthenticated) { toast.error('Vui lòng đăng nhập'); return; }
     setAdding(true);
@@ -39,6 +48,8 @@ export default function ProductDetailPage() {
         await addItem(product!.id, displayedQty);
       }
       toast.success(`Đã thêm ${displayedQty} sản phẩm vào giỏ! 🛍️`);
+    } catch (err) {
+      showCartError(err);
     } finally { setAdding(false); }
   };
 
@@ -59,7 +70,11 @@ export default function ProductDetailPage() {
     if (!product) return;
 
     if (cartItem) {
-      await updateItemQuantity(cartItem.cartItemId, Math.min(product.inventoryCount, cartItem.quantity + 1));
+      try {
+        await updateItemQuantity(cartItem.cartItemId, Math.min(product.inventoryCount, cartItem.quantity + 1));
+      } catch (err) {
+        showCartError(err);
+      }
       return;
     }
 
