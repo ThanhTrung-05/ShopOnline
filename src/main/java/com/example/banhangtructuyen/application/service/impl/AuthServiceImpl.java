@@ -5,67 +5,77 @@ import com.example.banhangtructuyen.application.dto.auth.RegisterResponse;
 import com.example.banhangtructuyen.application.service.AuthService;
 import com.example.banhangtructuyen.application.service.KeycloakAdminService;
 import com.example.banhangtructuyen.domain.exception.EmailAlreadyExistsException;
-import com.example.banhangtructuyen.domain.model.Cart;
-import com.example.banhangtructuyen.domain.model.Customer;
-import com.example.banhangtructuyen.domain.repository.CartRepository;
+import com.example.banhangtructuyen.domain.exception.KeycloakProvisioningException;
+import com.example.banhangtructuyen.domain.exception.RegistrationProvisioningException;
 import com.example.banhangtructuyen.domain.repository.CustomerRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.crypto.password.PasswordEncoder;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
-@Transactional
 public class AuthServiceImpl implements AuthService {
 
     private final CustomerRepository customerRepository;
-    private final CartRepository cartRepository;
-    private final PasswordEncoder passwordEncoder;
+    private final CustomerRegistrationPersistenceService registrationPersistenceService;
     private final KeycloakAdminService keycloakAdminService;
 
     @Override
     public RegisterResponse register(final RegisterRequest request) {
-        if (customerRepository.existsByEmail(request.email())) {
-            throw new EmailAlreadyExistsException(request.email());
-        }
-
         String keycloakUserId = null;
         try {
+            if (customerRepository.existsByEmail(request.email())) {
+                throw new EmailAlreadyExistsException(request.email());
+            }
+
             keycloakUserId = keycloakAdminService.createUser(request.email(), request.fullName());
             keycloakAdminService.setPassword(keycloakUserId, request.password());
             keycloakAdminService.assignCustomerRole(keycloakUserId);
 
-            final Customer customer = Customer.builder()
-                    .email(request.email())
-                    .fullName(request.fullName())
-                    .phone(request.phone())
-                    .passwordHash(passwordEncoder.encode(request.password()))
-                    .keycloakUserId(keycloakUserId)
-                    .status(Customer.CustomerStatus.ACTIVE)
-                    .role(Customer.CustomerRole.USER)
-                    .build();
-
-            final Customer saved = customerRepository.save(customer);
-            cartRepository.save(Cart.builder()
-                    .customerId(saved.getCustomerId())
-                    .build());
-            cartRepository.flush();
-
-            return new RegisterResponse(
-                    saved.getCustomerId(),
-                    saved.getEmail(),
-                    saved.getFullName(),
-                    saved.getPhone(),
-                    saved.getRole().name(),
-                    saved.getStatus().name(),
-                    saved.getCreatedAt()
-            );
-        } catch (final RuntimeException ex) {
+            return registrationPersistenceService.createCustomerWithLifetimeCart(
+                    request.email(), request.fullName(), request.phone(), keycloakUserId);
+        } catch (final RuntimeException primaryFailure) {
             if (keycloakUserId != null) {
-                keycloakAdminService.deleteUser(keycloakUserId);
+                compensateKeycloakUser(keycloakUserId, request.email(), primaryFailure);
+            } else if (!(primaryFailure instanceof EmailAlreadyExistsException)) {
+                log.error("Registration failed before a Keycloak user id was obtained. "
+                                + "email={}, failure={}",
+                        request.email(), primaryFailure.toString(), primaryFailure);
             }
-            throw ex;
+            throw classifyFailure(primaryFailure);
         }
+    }
+
+    private void compensateKeycloakUser(
+            final String keycloakUserId,
+            final String email,
+            final RuntimeException primaryFailure) {
+        try {
+            keycloakAdminService.deleteUser(keycloakUserId);
+            log.warn("Registration failed after Keycloak user creation; compensation deleted user. "
+                    + "email={}, keycloakUserId={}", email, keycloakUserId, primaryFailure);
+        } catch (final RuntimeException cleanupFailure) {
+            primaryFailure.addSuppressed(cleanupFailure);
+            log.error("Registration and Keycloak compensation both failed; manual cleanup is required. "
+                            + "email={}, keycloakUserId={}, primaryFailure={}, cleanupFailure={}",
+                    email,
+                    keycloakUserId,
+                    primaryFailure.toString(),
+                    cleanupFailure.toString(),
+                    primaryFailure);
+        }
+    }
+
+    private RuntimeException classifyFailure(final RuntimeException failure) {
+        if (failure instanceof EmailAlreadyExistsException
+                || failure instanceof KeycloakProvisioningException
+                || failure instanceof DataIntegrityViolationException
+                || failure instanceof RegistrationProvisioningException) {
+            return failure;
+        }
+        return new RegistrationProvisioningException(
+                "Registration failed during internal customer provisioning", failure);
     }
 }

@@ -29,8 +29,11 @@ public interface KeycloakAdminService {
     void assignCustomerRole(String keycloakUserId);
 
     /**
-     * Best-effort deletion used to compensate a partially-provisioned Keycloak user when a
-     * later step in registration fails. Never throws — failures are logged only.
+     * Deletes a partially-provisioned Keycloak user as registration compensation.
+     * A missing user is treated as already compensated.
+     *
+     * @throws com.example.banhangtructuyen.domain.exception.KeycloakProvisioningException
+     *         when Keycloak cannot confirm deletion
      */
     void deleteUser(String keycloakUserId);
 }

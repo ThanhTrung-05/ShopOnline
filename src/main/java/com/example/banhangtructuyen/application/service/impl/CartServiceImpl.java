@@ -5,6 +5,7 @@ import com.example.banhangtructuyen.application.dto.cart.CartItemResponse;
 import com.example.banhangtructuyen.application.dto.cart.CartResponse;
 import com.example.banhangtructuyen.application.dto.cart.CartViewItemResponse;
 import com.example.banhangtructuyen.application.dto.cart.UpdateCartItemQuantityRequest;
+import com.example.banhangtructuyen.application.service.AuthenticatedCustomerResolver;
 import com.example.banhangtructuyen.application.service.CartService;
 import com.example.banhangtructuyen.domain.exception.ResourceNotFoundException;
 import com.example.banhangtructuyen.domain.model.Cart;
@@ -28,17 +29,19 @@ import java.util.List;
 public class CartServiceImpl implements CartService {
 
     private static final int MAX_QUANTITY = 1000;
+    private static final String MIN_QUANTITY_MESSAGE = "Cart item quantity must be at least 1";
     private static final String INSUFFICIENT_STOCK_MESSAGE = "Requested quantity exceeds available stock";
 
     private final CartRepository cartRepository;
     private final CartItemRepository cartItemRepository;
     private final CustomerRepository customerRepository;
     private final ProductRepository productRepository;
+    private final AuthenticatedCustomerResolver authenticatedCustomerResolver;
 
     @Override
     @Transactional(readOnly = true)
     public CartResponse getCurrentCart(final String keycloakSubject) {
-        final Customer customer = findCustomer(keycloakSubject);
+        final Customer customer = authenticatedCustomerResolver.resolveActiveCustomer(keycloakSubject);
         if (cartRepository.findByCustomerId(customer.getCustomerId()).isEmpty()) {
             return emptyCart();
         }
@@ -56,14 +59,14 @@ public class CartServiceImpl implements CartService {
 
     @Override
     public CartItemResponse addItem(final String keycloakSubject, final AddCartItemRequest request) {
-        final Customer customer = findCustomer(keycloakSubject);
+        final Customer customer = authenticatedCustomerResolver.resolveActiveCustomer(keycloakSubject);
         final Product product = productRepository.findActiveById(request.productId())
                 .orElseThrow(() -> new ResourceNotFoundException("Product", request.productId()));
-        final Cart cart = cartRepository.findByCustomerId(customer.getCustomerId()).orElse(null);
-        final CartItem existingItem = cart == null
-                ? null
-                : cartItemRepository.findByCart_CartIdAndProduct_ProductId(
-                        cart.getCartId(), product.getProductId()).orElse(null);
+        validateQuantity(request.quantity(), product);
+
+        final Cart cart = findOrCreateCartForUpdate(customer);
+        final CartItem existingItem = cartItemRepository.findByCart_CartIdAndProduct_ProductId(
+                cart.getCartId(), product.getProductId()).orElse(null);
 
         final int resultingQuantity = existingItem == null
                 ? request.quantity()
@@ -75,13 +78,8 @@ public class CartServiceImpl implements CartService {
             existingItem.setQuantity(resultingQuantity);
             item = existingItem;
         } else {
-            final Cart targetCart = cart != null
-                    ? cart
-                    : cartRepository.save(Cart.builder()
-                            .customerId(customer.getCustomerId())
-                            .build());
             item = CartItem.builder()
-                    .cart(targetCart)
+                    .cart(cart)
                     .product(product)
                     .quantity(request.quantity())
                     .unitPrice(product.getPrice())
@@ -96,8 +94,8 @@ public class CartServiceImpl implements CartService {
             final String keycloakSubject,
             final Long cartItemId,
             final UpdateCartItemQuantityRequest request) {
-        final Customer customer = findCustomer(keycloakSubject);
-        final CartItem item = findOwnedCartItem(customer.getCustomerId(), cartItemId);
+        final Customer customer = authenticatedCustomerResolver.resolveActiveCustomer(keycloakSubject);
+        final CartItem item = findOwnedCartItemForUpdate(customer.getCustomerId(), cartItemId);
 
         validateQuantity(request.quantity(), item.getProduct());
         item.setQuantity(request.quantity());
@@ -106,23 +104,40 @@ public class CartServiceImpl implements CartService {
 
     @Override
     public void removeItem(final String keycloakSubject, final Long cartItemId) {
-        final Customer customer = findCustomer(keycloakSubject);
-        final CartItem item = findOwnedCartItem(customer.getCustomerId(), cartItemId);
+        final Customer customer = authenticatedCustomerResolver.resolveActiveCustomer(keycloakSubject);
+        final CartItem item = findOwnedCartItemForUpdate(customer.getCustomerId(), cartItemId);
 
         cartItemRepository.delete(item);
     }
 
-    private Customer findCustomer(final String keycloakSubject) {
-        return customerRepository.findByKeycloakUserId(keycloakSubject)
-                .orElseThrow(() -> new ResourceNotFoundException("Customer", keycloakSubject));
+    private Cart findOrCreateCartForUpdate(final Customer customer) {
+        final Long customerId = customer.getCustomerId();
+        final Cart existingCart = cartRepository.findByCustomerIdForUpdate(customerId).orElse(null);
+        if (existingCart != null) {
+            return existingCart;
+        }
+
+        customerRepository.findByIdForUpdate(customerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer", customerId));
+
+        return cartRepository.findByCustomerIdForUpdate(customerId)
+                .orElseGet(() -> cartRepository.save(Cart.builder()
+                        .customerId(customerId)
+                        .build()));
     }
 
-    private CartItem findOwnedCartItem(final Long customerId, final Long cartItemId) {
+    private CartItem findOwnedCartItemForUpdate(final Long customerId, final Long cartItemId) {
+        cartRepository.findByCustomerIdForUpdate(customerId)
+                .orElseThrow(() -> new ResourceNotFoundException("CartItem", cartItemId));
+
         return cartItemRepository.findByCart_CustomerIdAndCartItemId(customerId, cartItemId)
                 .orElseThrow(() -> new ResourceNotFoundException("CartItem", cartItemId));
     }
 
     private static void validateQuantity(final int requestedQuantity, final Product product) {
+        if (requestedQuantity < 1) {
+            throw new IllegalArgumentException(MIN_QUANTITY_MESSAGE);
+        }
         if (requestedQuantity > MAX_QUANTITY) {
             throw new IllegalArgumentException("Cart item quantity must not exceed 1000");
         }

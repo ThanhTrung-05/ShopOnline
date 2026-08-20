@@ -3,6 +3,7 @@ package com.example.banhangtructuyen.application.service;
 import com.example.banhangtructuyen.application.dto.customer.CustomerResponse;
 import com.example.banhangtructuyen.application.dto.customer.UpdateProfileRequest;
 import com.example.banhangtructuyen.application.service.impl.CustomerProfileServiceImpl;
+import com.example.banhangtructuyen.domain.exception.CustomerAccountNotActiveException;
 import com.example.banhangtructuyen.domain.exception.ResourceNotFoundException;
 import com.example.banhangtructuyen.domain.model.Customer;
 import com.example.banhangtructuyen.domain.repository.CustomerRepository;
@@ -12,6 +13,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -39,10 +42,16 @@ class CustomerProfileServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new CustomerProfileServiceImpl(customerRepository);
+        service = new CustomerProfileServiceImpl(
+                customerRepository,
+                new AuthenticatedCustomerResolver(customerRepository));
     }
 
     private static Customer sampleCustomer() {
+        return sampleCustomer(Customer.CustomerStatus.ACTIVE);
+    }
+
+    private static Customer sampleCustomer(final Customer.CustomerStatus status) {
         return Customer.builder()
                 .customerId(1L)
                 .email("customer@example.com")
@@ -50,7 +59,7 @@ class CustomerProfileServiceImplTest {
                 .phone("0987654321")
                 .passwordHash("$2a$12$hashedvalue")
                 .keycloakUserId(SUBJECT)
-                .status(Customer.CustomerStatus.ACTIVE)
+                .status(status)
                 .role(Customer.CustomerRole.USER)
                 .createdAt(Instant.parse("2026-08-01T00:00:00Z"))
                 .updatedAt(Instant.parse("2026-08-01T00:00:00Z"))
@@ -93,6 +102,17 @@ class CustomerProfileServiceImplTest {
 
             assertThatThrownBy(() -> service.getProfile(SUBJECT))
                     .isInstanceOf(ResourceNotFoundException.class);
+        }
+
+        @ParameterizedTest
+        @EnumSource(value = Customer.CustomerStatus.class, names = {"BANNED", "INACTIVE"})
+        @DisplayName("rejects a mapped customer whose account is not ACTIVE")
+        void getProfile_shouldReject_whenCustomerIsNotActive(final Customer.CustomerStatus status) {
+            when(customerRepository.findByKeycloakUserId(SUBJECT))
+                    .thenReturn(Optional.of(sampleCustomer(status)));
+
+            assertThatThrownBy(() -> service.getProfile(SUBJECT))
+                    .isInstanceOf(CustomerAccountNotActiveException.class);
         }
     }
 

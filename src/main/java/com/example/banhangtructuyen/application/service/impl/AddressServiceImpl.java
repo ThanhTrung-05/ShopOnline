@@ -3,11 +3,10 @@ package com.example.banhangtructuyen.application.service.impl;
 import com.example.banhangtructuyen.application.dto.customer.AddressRequest;
 import com.example.banhangtructuyen.application.dto.customer.AddressResponse;
 import com.example.banhangtructuyen.application.service.AddressService;
+import com.example.banhangtructuyen.application.service.AuthenticatedCustomerResolver;
 import com.example.banhangtructuyen.domain.exception.ResourceNotFoundException;
 import com.example.banhangtructuyen.domain.model.Address;
-import com.example.banhangtructuyen.domain.model.Customer;
 import com.example.banhangtructuyen.domain.repository.AddressRepository;
-import com.example.banhangtructuyen.domain.repository.CustomerRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,7 +19,7 @@ import java.util.List;
 public class AddressServiceImpl implements AddressService {
 
     private final AddressRepository addressRepository;
-    private final CustomerRepository customerRepository;
+    private final AuthenticatedCustomerResolver authenticatedCustomerResolver;
 
     @Override
     @Transactional(readOnly = true)
@@ -105,9 +104,7 @@ public class AddressServiceImpl implements AddressService {
     }
 
     private Long resolveCustomerId(final String keycloakSubject) {
-        return customerRepository.findByKeycloakUserId(keycloakSubject)
-                .map(Customer::getCustomerId)
-                .orElseThrow(() -> new ResourceNotFoundException("Customer", keycloakSubject));
+        return authenticatedCustomerResolver.resolveActiveCustomer(keycloakSubject).getCustomerId();
     }
 
     private Address findOwnedAddress(final Long addressId, final Long customerId) {

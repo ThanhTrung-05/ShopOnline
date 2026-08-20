@@ -22,9 +22,10 @@
       "directAccessGrantsEnabled": false,
       "redirectUris": [
         "http://localhost:3000/*",
+        "http://localhost:5173/*",
         "https://oauth.pstmn.io/v1/browser-callback"
       ],
-      "webOrigins": ["http://localhost:3000"],
+      "webOrigins": ["http://localhost:3000", "http://localhost:5173"],
       "defaultClientScopes": ["basic", "email", "profile", "roles", "web-origins", "acr", "shoponline-backend-audience"],
       "attributes": {
         "pkce.code.challenge.method": "S256",

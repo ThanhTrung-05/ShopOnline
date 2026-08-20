@@ -42,6 +42,8 @@ public class CustomerController {
             content = @Content(schema = @Schema(implementation = ApiResponse.class))),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Missing, invalid, or expired token",
             content = @Content(schema = @Schema(implementation = ApiResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Customer account is not active",
+            content = @Content(schema = @Schema(implementation = ApiResponse.class))),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "No customer record for this identity",
             content = @Content(schema = @Schema(implementation = ApiResponse.class)))
     })
@@ -62,6 +64,8 @@ public class CustomerController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Blank full name or invalid phone format",
             content = @Content(schema = @Schema(implementation = ApiResponse.class))),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Missing, invalid, or expired token",
+            content = @Content(schema = @Schema(implementation = ApiResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Customer account is not active",
             content = @Content(schema = @Schema(implementation = ApiResponse.class))),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "No customer record for this identity",
             content = @Content(schema = @Schema(implementation = ApiResponse.class)))

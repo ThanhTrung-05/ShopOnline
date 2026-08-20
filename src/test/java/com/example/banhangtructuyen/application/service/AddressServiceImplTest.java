@@ -3,6 +3,7 @@ package com.example.banhangtructuyen.application.service;
 import com.example.banhangtructuyen.application.dto.customer.AddressRequest;
 import com.example.banhangtructuyen.application.dto.customer.AddressResponse;
 import com.example.banhangtructuyen.application.service.impl.AddressServiceImpl;
+import com.example.banhangtructuyen.domain.exception.CustomerAccountNotActiveException;
 import com.example.banhangtructuyen.domain.exception.ResourceNotFoundException;
 import com.example.banhangtructuyen.domain.model.Address;
 import com.example.banhangtructuyen.domain.model.Customer;
@@ -13,6 +14,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -46,16 +49,22 @@ class AddressServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new AddressServiceImpl(addressRepository, customerRepository);
+        service = new AddressServiceImpl(
+                addressRepository,
+                new AuthenticatedCustomerResolver(customerRepository));
     }
 
     private static Customer sampleCustomer() {
+        return sampleCustomer(Customer.CustomerStatus.ACTIVE);
+    }
+
+    private static Customer sampleCustomer(final Customer.CustomerStatus status) {
         return Customer.builder()
                 .customerId(CUSTOMER_ID)
                 .email("customer@example.com")
                 .fullName("Nguyễn Văn A")
                 .keycloakUserId(SUBJECT)
-                .status(Customer.CustomerStatus.ACTIVE)
+                .status(status)
                 .role(Customer.CustomerRole.USER)
                 .build();
     }
@@ -108,6 +117,19 @@ class AddressServiceImplTest {
 
             assertThatThrownBy(() -> service.listAddresses(SUBJECT))
                     .isInstanceOf(ResourceNotFoundException.class);
+        }
+
+        @ParameterizedTest
+        @EnumSource(value = Customer.CustomerStatus.class, names = {"BANNED", "INACTIVE"})
+        @DisplayName("does not query addresses when customer is not ACTIVE")
+        void listAddresses_shouldReject_whenCustomerIsNotActive(final Customer.CustomerStatus status) {
+            when(customerRepository.findByKeycloakUserId(SUBJECT))
+                    .thenReturn(Optional.of(sampleCustomer(status)));
+
+            assertThatThrownBy(() -> service.listAddresses(SUBJECT))
+                    .isInstanceOf(CustomerAccountNotActiveException.class);
+
+            verify(addressRepository, never()).findByCustomerIdOrderByAddressIdAsc(any());
         }
     }
 
