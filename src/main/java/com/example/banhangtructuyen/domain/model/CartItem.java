@@ -10,6 +10,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -23,7 +24,13 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 @Entity
-@Table(name = "CART_ITEMS")
+@Table(
+        name = "CART_ITEMS",
+        uniqueConstraints = @UniqueConstraint(
+                name = "UQ_CART_ITEMS_PRODUCT",
+                columnNames = {"CART_ID", "PRODUCT_ID"}
+        )
+)
 @EntityListeners(AuditingEntityListener.class)
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class CartItem {

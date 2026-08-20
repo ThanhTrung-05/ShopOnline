@@ -61,7 +61,7 @@ class SecurityConfigTest {
     @Test
     @DisplayName("preflight allows required methods")
     void preflight_allowsRequiredMethods() throws Exception {
-        for (final String method : new String[] {"GET", "POST", "PUT", "DELETE", "OPTIONS"}) {
+        for (final String method : new String[] {"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}) {
             mockMvc.perform(options("/api/v1/cart/items")
                             .header(HttpHeaders.ORIGIN, LOCAL_FRONTEND_ORIGIN)
                             .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, method)

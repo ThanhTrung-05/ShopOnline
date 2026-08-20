@@ -5,12 +5,15 @@ import com.example.banhangtructuyen.config.KeycloakAdminProperties;
 import com.example.banhangtructuyen.domain.exception.EmailAlreadyExistsException;
 import com.example.banhangtructuyen.domain.exception.KeycloakProvisioningException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
 import java.util.List;
@@ -33,7 +36,15 @@ public class KeycloakAdminServiceImpl implements KeycloakAdminService {
 
     public KeycloakAdminServiceImpl(final KeycloakAdminProperties properties) {
         this.properties = properties;
-        this.restClient = RestClient.builder().baseUrl(properties.getBaseUrl()).build();
+        final SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(toTimeoutMillis(
+                properties.getConnectTimeout(), "app.keycloak.admin.connect-timeout"));
+        requestFactory.setReadTimeout(toTimeoutMillis(
+                properties.getReadTimeout(), "app.keycloak.admin.read-timeout"));
+        this.restClient = RestClient.builder()
+                .baseUrl(properties.getBaseUrl())
+                .requestFactory(requestFactory)
+                .build();
     }
 
     @Override
@@ -58,9 +69,11 @@ public class KeycloakAdminServiceImpl implements KeycloakAdminService {
                     .toBodilessEntity();
 
             final String location = response.getHeaders().getFirst("Location");
-            if (location == null) {
+            if (location == null || location.isBlank() || location.endsWith("/")) {
+                log.error("Keycloak create returned success without a usable user id; outcome requires "
+                        + "manual reconciliation. email={}", email);
                 throw new KeycloakProvisioningException(
-                        "Keycloak createUser succeeded but returned no Location header");
+                        "Keycloak createUser succeeded but returned no usable Location header");
             }
             return location.substring(location.lastIndexOf('/') + 1);
         } catch (final RestClientResponseException ex) {
@@ -69,6 +82,11 @@ public class KeycloakAdminServiceImpl implements KeycloakAdminService {
             }
             throw new KeycloakProvisioningException(
                     "Failed to create Keycloak user for " + email + ": " + ex.getStatusCode(), ex);
+        } catch (final RestClientException ex) {
+            log.error("Keycloak create request failed with an unknown remote outcome; manual reconciliation "
+                    + "may be required. email={}", email, ex);
+            throw new KeycloakProvisioningException(
+                    "Keycloak create request failed for " + email + " with an unknown outcome", ex);
         }
     }
 
@@ -91,6 +109,9 @@ public class KeycloakAdminServiceImpl implements KeycloakAdminService {
         } catch (final RestClientResponseException ex) {
             throw new KeycloakProvisioningException(
                     "Failed to set password for Keycloak user " + keycloakUserId + ": " + ex.getStatusCode(), ex);
+        } catch (final RestClientException ex) {
+            throw new KeycloakProvisioningException(
+                    "Failed to set password for Keycloak user " + keycloakUserId, ex);
         }
     }
 
@@ -113,6 +134,10 @@ public class KeycloakAdminServiceImpl implements KeycloakAdminService {
             throw new KeycloakProvisioningException(
                     "Failed to assign role " + properties.getCustomerRole()
                             + " to Keycloak user " + keycloakUserId + ": " + ex.getStatusCode(), ex);
+        } catch (final RestClientException ex) {
+            throw new KeycloakProvisioningException(
+                    "Failed to assign role " + properties.getCustomerRole()
+                            + " to Keycloak user " + keycloakUserId, ex);
         }
     }
 
@@ -124,9 +149,15 @@ public class KeycloakAdminServiceImpl implements KeycloakAdminService {
                     .header("Authorization", "Bearer " + fetchAccessToken())
                     .retrieve()
                     .toBodilessEntity();
-        } catch (final Exception ex) {
-            log.error("Best-effort compensation failed: could not delete orphaned Keycloak user {}. "
-                    + "Manual cleanup required.", keycloakUserId, ex);
+        } catch (final RestClientResponseException ex) {
+            if (ex.getStatusCode() == HttpStatus.NOT_FOUND) {
+                return;
+            }
+            throw new KeycloakProvisioningException(
+                    "Failed to delete Keycloak user " + keycloakUserId + ": " + ex.getStatusCode(), ex);
+        } catch (final RestClientException ex) {
+            throw new KeycloakProvisioningException(
+                    "Failed to delete Keycloak user " + keycloakUserId, ex);
         }
     }
 
@@ -141,24 +172,40 @@ public class KeycloakAdminServiceImpl implements KeycloakAdminService {
             if (clients == null || clients.isEmpty()) {
                 throw new KeycloakProvisioningException("Keycloak client not found: " + clientId);
             }
-            return (String) clients.get(0).get("id");
+            final Object clientUuid = clients.get(0).get("id");
+            if (!(clientUuid instanceof String value) || value.isBlank()) {
+                throw new KeycloakProvisioningException(
+                        "Keycloak client response missing id for: " + clientId);
+            }
+            return value;
         } catch (final RestClientResponseException ex) {
             throw new KeycloakProvisioningException(
                     "Failed to resolve Keycloak client " + clientId + ": " + ex.getStatusCode(), ex);
+        } catch (final RestClientException ex) {
+            throw new KeycloakProvisioningException(
+                    "Failed to resolve Keycloak client " + clientId, ex);
         }
     }
 
     private Map<String, Object> resolveClientRole(final String token, final String clientUuid, final String roleName) {
         try {
-            return restClient.get()
+            final Map<String, Object> role = restClient.get()
                     .uri("/admin/realms/{realm}/clients/{clientUuid}/roles/{roleName}",
                             properties.getRealm(), clientUuid, roleName)
                     .header("Authorization", "Bearer " + token)
                     .retrieve()
                     .body(Map.class);
+            if (role == null || role.isEmpty()) {
+                throw new KeycloakProvisioningException(
+                        "Keycloak client role response was empty for: " + roleName);
+            }
+            return role;
         } catch (final RestClientResponseException ex) {
             throw new KeycloakProvisioningException(
                     "Failed to resolve Keycloak client role " + roleName + ": " + ex.getStatusCode(), ex);
+        } catch (final RestClientException ex) {
+            throw new KeycloakProvisioningException(
+                    "Failed to resolve Keycloak client role " + roleName, ex);
         }
     }
 
@@ -176,14 +223,28 @@ public class KeycloakAdminServiceImpl implements KeycloakAdminService {
                     .retrieve()
                     .body(Map.class);
 
-            if (response == null || response.get("access_token") == null) {
+            if (response == null
+                    || !(response.get("access_token") instanceof String accessToken)
+                    || accessToken.isBlank()) {
                 throw new KeycloakProvisioningException("Keycloak token response missing access_token");
             }
-            return (String) response.get("access_token");
+            return accessToken;
         } catch (final RestClientResponseException ex) {
             throw new KeycloakProvisioningException(
                     "Failed to obtain Keycloak service account token: " + ex.getStatusCode(), ex);
+        } catch (final RestClientException ex) {
+            throw new KeycloakProvisioningException(
+                    "Failed to obtain Keycloak service account token", ex);
         }
+    }
+
+    private static int toTimeoutMillis(final java.time.Duration timeout, final String propertyName) {
+        final long millis = timeout.toMillis();
+        if (millis <= 0 || millis > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException(propertyName
+                    + " must be between 1ms and " + Integer.MAX_VALUE + "ms");
+        }
+        return (int) millis;
     }
 
     static KeycloakName toKeycloakName(final String fullName) {

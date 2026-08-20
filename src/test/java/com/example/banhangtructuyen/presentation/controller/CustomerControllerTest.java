@@ -3,11 +3,16 @@ package com.example.banhangtructuyen.presentation.controller;
 import com.example.banhangtructuyen.application.dto.customer.CustomerResponse;
 import com.example.banhangtructuyen.application.dto.customer.UpdateProfileRequest;
 import com.example.banhangtructuyen.application.service.CustomerProfileService;
+import com.example.banhangtructuyen.domain.exception.CustomerAccountNotActiveException;
 import com.example.banhangtructuyen.domain.exception.ResourceNotFoundException;
+import com.example.banhangtructuyen.domain.model.Customer;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.validation.ConstraintViolationException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -95,6 +100,21 @@ class CustomerControllerTest {
             mockMvc.perform(get("/api/v1/customers/me").with(customerJwt()))
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.success").value(false));
+        }
+
+        @ParameterizedTest
+        @EnumSource(value = Customer.CustomerStatus.class, names = {"BANNED", "INACTIVE"})
+        @DisplayName("403 — mapped customer account is not ACTIVE")
+        void getProfile_shouldReturn403_whenCustomerIsNotActive(
+                final Customer.CustomerStatus customerStatus) throws Exception {
+            when(customerProfileService.getProfile(SUBJECT))
+                    .thenThrow(new CustomerAccountNotActiveException(customerStatus));
+
+            mockMvc.perform(get("/api/v1/customers/me").with(customerJwt()))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.success").value(false))
+                    .andExpect(jsonPath("$.message").value(
+                            "Customer account is not active (status: " + customerStatus + ")"));
         }
 
         @Test
@@ -193,6 +213,21 @@ class CustomerControllerTest {
                             .content(toJson(new UpdateProfileRequest(null, "123"))))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.success").value(false));
+        }
+
+        @Test
+        @DisplayName("400 — service validation without a violation set keeps its message")
+        void updateProfile_shouldReturn400_whenServiceValidationHasNoViolationSet() throws Exception {
+            when(customerProfileService.updateProfile(eq(SUBJECT), any(UpdateProfileRequest.class)))
+                    .thenThrow(new ConstraintViolationException("Full name must not be blank", null));
+
+            mockMvc.perform(patch("/api/v1/customers/me")
+                            .with(customerJwt())
+                            .contentType("application/json")
+                            .content(toJson(new UpdateProfileRequest("   ", null))))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.success").value(false))
+                    .andExpect(jsonPath("$.message").value("Full name must not be blank"));
         }
 
         @Test

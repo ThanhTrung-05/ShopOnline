@@ -87,6 +87,19 @@ class CustomerRepositoryTest {
     }
 
     @Test
+    @DisplayName("save — allows a null legacy password hash for Keycloak-managed customers")
+    void save_shouldAllowNullPasswordHash_forKeycloakManagedCustomer() {
+        final Customer customer = sampleCustomer("keycloak-password@example.com");
+        customer.setPasswordHash(null);
+        customer.setKeycloakUserId("f47ac10b-58cc-4372-a567-0e02b2c3d480");
+
+        final Customer saved = customerRepository.saveAndFlush(customer);
+
+        assertThat(saved.getCustomerId()).isNotNull();
+        assertThat(saved.getPasswordHash()).isNull();
+    }
+
+    @Test
     @DisplayName("findByKeycloakUserId — returns customer when keycloakUserId exists")
     void findByKeycloakUserId_shouldReturnCustomer_whenExists() {
         final Customer customer = sampleCustomer("kc-linked@example.com");
@@ -103,5 +116,19 @@ class CustomerRepositoryTest {
     @DisplayName("findByKeycloakUserId — returns empty when keycloakUserId does not exist")
     void findByKeycloakUserId_shouldReturnEmpty_whenNotFound() {
         assertThat(customerRepository.findByKeycloakUserId("no-such-subject")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("save — rejects duplicate Keycloak user id")
+    void save_shouldThrow_whenKeycloakUserIdDuplicate() {
+        final Customer first = sampleCustomer("first-kc@example.com");
+        first.setKeycloakUserId("shared-keycloak-user-id");
+        customerRepository.saveAndFlush(first);
+
+        final Customer second = sampleCustomer("second-kc@example.com");
+        second.setKeycloakUserId("shared-keycloak-user-id");
+
+        assertThatThrownBy(() -> customerRepository.saveAndFlush(second))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 }

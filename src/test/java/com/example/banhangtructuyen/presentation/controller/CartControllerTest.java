@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -188,6 +189,21 @@ class CartControllerTest {
                         .content(toJson(new AddCartItemRequest(99L, 1))))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    @DisplayName("Cart database constraint conflict is not reported as duplicate email")
+    void addItem_shouldReturnGeneric409_whenDatabaseConstraintFails() throws Exception {
+        when(cartService.addItem(eq(SUBJECT), any(AddCartItemRequest.class)))
+                .thenThrow(new DataIntegrityViolationException("UQ_CART_ITEMS_PRODUCT"));
+
+        mockMvc.perform(post("/api/v1/cart/items")
+                        .with(customerJwt())
+                        .contentType("application/json")
+                        .content(toJson(new AddCartItemRequest(10L, 1))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Request conflicts with existing data"));
     }
 
     @Test

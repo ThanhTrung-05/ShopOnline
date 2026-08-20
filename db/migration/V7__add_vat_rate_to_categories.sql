@@ -1,4 +1,4 @@
-﻿-- ============================================================
+-- ============================================================
 -- V7__add_vat_rate_to_categories.sql
 -- ATS-4: Add VAT_RATE to CATEGORIES table
 -- VAT rate (%) applied to all products within a category.

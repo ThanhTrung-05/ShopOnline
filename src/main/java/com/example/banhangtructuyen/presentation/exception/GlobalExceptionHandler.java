@@ -1,9 +1,11 @@
 package com.example.banhangtructuyen.presentation.exception;
 
 import com.example.banhangtructuyen.application.dto.ApiResponse;
+import com.example.banhangtructuyen.domain.exception.CustomerAccountNotActiveException;
 import com.example.banhangtructuyen.domain.exception.DuplicateResourceException;
 import com.example.banhangtructuyen.domain.exception.EmailAlreadyExistsException;
 import com.example.banhangtructuyen.domain.exception.KeycloakProvisioningException;
+import com.example.banhangtructuyen.domain.exception.RegistrationProvisioningException;
 import com.example.banhangtructuyen.domain.exception.ResourceInUseException;
 import com.example.banhangtructuyen.domain.exception.ResourceNotFoundException;
 import jakarta.validation.ConstraintViolationException;
@@ -20,6 +22,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleNotFound(final ResourceNotFoundException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    @ExceptionHandler(CustomerAccountNotActiveException.class)
+    public ResponseEntity<ApiResponse<Void>> handleCustomerAccountNotActive(
+            final CustomerAccountNotActiveException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ApiResponse.error(ex.getMessage()));
     }
 
@@ -47,10 +56,17 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error("Unable to complete registration. Please try again later."));
     }
 
+    @ExceptionHandler(RegistrationProvisioningException.class)
+    public ResponseEntity<ApiResponse<Void>> handleRegistrationProvisioning(
+            final RegistrationProvisioningException ex) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.error("Registration failed due to an internal provisioning error"));
+    }
+
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiResponse<Void>> handleDataIntegrityViolation(final DataIntegrityViolationException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(ApiResponse.error("Email already registered"));
+                .body(ApiResponse.error("Request conflicts with existing data"));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -65,10 +81,15 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ApiResponse<Void>> handleConstraintViolation(final ConstraintViolationException ex) {
-        final String message = ex.getConstraintViolations().stream()
-                .findFirst()
-                .map(violation -> violation.getMessage())
-                .orElse("Validation failed");
+        final String fallbackMessage = ex.getMessage() == null || ex.getMessage().isBlank()
+                ? "Validation failed"
+                : ex.getMessage();
+        final String message = ex.getConstraintViolations() == null
+                ? fallbackMessage
+                : ex.getConstraintViolations().stream()
+                        .findFirst()
+                        .map(violation -> violation.getMessage())
+                        .orElse(fallbackMessage);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.error(message));
     }

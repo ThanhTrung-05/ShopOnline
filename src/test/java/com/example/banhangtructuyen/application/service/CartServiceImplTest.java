@@ -5,6 +5,7 @@ import com.example.banhangtructuyen.application.dto.cart.CartItemResponse;
 import com.example.banhangtructuyen.application.dto.cart.CartResponse;
 import com.example.banhangtructuyen.application.dto.cart.UpdateCartItemQuantityRequest;
 import com.example.banhangtructuyen.application.service.impl.CartServiceImpl;
+import com.example.banhangtructuyen.domain.exception.CustomerAccountNotActiveException;
 import com.example.banhangtructuyen.domain.exception.ResourceNotFoundException;
 import com.example.banhangtructuyen.domain.model.Cart;
 import com.example.banhangtructuyen.domain.model.CartItem;
@@ -20,6 +21,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -31,6 +35,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -52,17 +57,26 @@ class CartServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new CartServiceImpl(cartRepository, cartItemRepository, customerRepository, productRepository);
+        service = new CartServiceImpl(
+                cartRepository,
+                cartItemRepository,
+                customerRepository,
+                productRepository,
+                new AuthenticatedCustomerResolver(customerRepository));
     }
 
     private static Customer sampleCustomer() {
+        return sampleCustomer(Customer.CustomerStatus.ACTIVE);
+    }
+
+    private static Customer sampleCustomer(final Customer.CustomerStatus status) {
         return Customer.builder()
                 .customerId(CUSTOMER_ID)
                 .email("customer@example.com")
                 .fullName("Nguyen Van A")
                 .passwordHash("$2a$12$hashedvalue")
                 .keycloakUserId(SUBJECT)
-                .status(Customer.CustomerStatus.ACTIVE)
+                .status(status)
                 .role(Customer.CustomerRole.USER)
                 .build();
     }
@@ -123,6 +137,15 @@ class CartServiceImplTest {
     private void stubCustomerAndProduct() {
         when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
         when(productRepository.findActiveById(PRODUCT_ID)).thenReturn(Optional.of(sampleProduct()));
+    }
+
+    private void stubExistingCartForUpdate(final Cart cart) {
+        when(cartRepository.findByCustomerIdForUpdate(CUSTOMER_ID)).thenReturn(Optional.of(cart));
+    }
+
+    private void stubMissingCartForUpdate() {
+        when(cartRepository.findByCustomerIdForUpdate(CUSTOMER_ID)).thenReturn(Optional.empty());
+        when(customerRepository.findByIdForUpdate(CUSTOMER_ID)).thenReturn(Optional.of(sampleCustomer()));
     }
 
     @Nested
@@ -239,6 +262,20 @@ class CartServiceImplTest {
             verify(cartRepository, never()).findByCustomerId(any());
             verify(cartItemRepository, never()).findViewItemsByCustomerId(any());
         }
+
+        @ParameterizedTest
+        @EnumSource(value = Customer.CustomerStatus.class, names = {"BANNED", "INACTIVE"})
+        @DisplayName("does not read Cart when customer is not ACTIVE")
+        void getCurrentCart_shouldReject_whenCustomerIsNotActive(final Customer.CustomerStatus status) {
+            when(customerRepository.findByKeycloakUserId(SUBJECT))
+                    .thenReturn(Optional.of(sampleCustomer(status)));
+
+            assertThatThrownBy(() -> service.getCurrentCart(SUBJECT))
+                    .isInstanceOf(CustomerAccountNotActiveException.class);
+
+            verify(cartRepository, never()).findByCustomerId(any());
+            verify(cartItemRepository, never()).findViewItemsByCustomerId(any());
+        }
     }
 
     @Nested
@@ -250,7 +287,7 @@ class CartServiceImplTest {
         void addItem_shouldCreateCartAndItem_whenCustomerHasNoCart() {
             stubCustomerAndProduct();
             final Cart createdCart = sampleCart();
-            when(cartRepository.findByCustomerId(CUSTOMER_ID)).thenReturn(Optional.empty());
+            stubMissingCartForUpdate();
             when(cartRepository.save(any(Cart.class))).thenReturn(createdCart);
             when(cartItemRepository.save(any(CartItem.class))).thenAnswer(inv -> {
                 final CartItem item = inv.getArgument(0);
@@ -273,7 +310,7 @@ class CartServiceImplTest {
             final Product product = sampleProduct(5);
             when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
             when(productRepository.findActiveById(PRODUCT_ID)).thenReturn(Optional.of(product));
-            when(cartRepository.findByCustomerId(CUSTOMER_ID)).thenReturn(Optional.empty());
+            stubMissingCartForUpdate();
             when(cartRepository.save(any(Cart.class))).thenReturn(sampleCart());
             when(cartItemRepository.save(any(CartItem.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -290,7 +327,7 @@ class CartServiceImplTest {
             final Product product = sampleProduct(5);
             when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
             when(productRepository.findActiveById(PRODUCT_ID)).thenReturn(Optional.of(product));
-            when(cartRepository.findByCustomerId(CUSTOMER_ID)).thenReturn(Optional.empty());
+            stubMissingCartForUpdate();
             when(cartRepository.save(any(Cart.class))).thenReturn(sampleCart());
             when(cartItemRepository.save(any(CartItem.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -301,19 +338,37 @@ class CartServiceImplTest {
             assertThat(product.getInventory().getReservedQuantity()).isZero();
         }
 
+        @ParameterizedTest
+        @ValueSource(ints = {0, -1})
+        @DisplayName("non-positive add quantity is rejected before Cart mutation")
+        void addItem_shouldReject_whenQuantityIsNotPositive(final int quantity) {
+            final Product product = sampleProduct(5);
+            when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
+            when(productRepository.findActiveById(PRODUCT_ID)).thenReturn(Optional.of(product));
+
+            assertThatThrownBy(() -> service.addItem(
+                    SUBJECT, new AddCartItemRequest(PRODUCT_ID, quantity)))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("Cart item quantity must be at least 1");
+
+            verify(cartRepository, never()).findByCustomerIdForUpdate(any());
+            verify(cartRepository, never()).save(any());
+            verify(cartItemRepository, never()).save(any());
+        }
+
         @Test
         @DisplayName("new item quantity over available stock is rejected without creating cart or item")
         void addItem_shouldRejectAndNotCreateCartOrItem_whenNewItemQuantityExceedsStock() {
             final Product product = sampleProduct(3);
             when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
             when(productRepository.findActiveById(PRODUCT_ID)).thenReturn(Optional.of(product));
-            when(cartRepository.findByCustomerId(CUSTOMER_ID)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.addItem(SUBJECT, new AddCartItemRequest(PRODUCT_ID, 4)))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessage("Requested quantity exceeds available stock");
 
             verify(cartRepository, never()).save(any());
+            verify(cartRepository, never()).findByCustomerIdForUpdate(any());
             verify(cartItemRepository, never()).save(any());
             assertThat(product.getInventory().getQuantity()).isEqualTo(3);
             assertThat(product.getInventory().getReservedQuantity()).isZero();
@@ -324,7 +379,7 @@ class CartServiceImplTest {
         void addItem_shouldReuseExistingCart() {
             stubCustomerAndProduct();
             final Cart existingCart = sampleCart();
-            when(cartRepository.findByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(existingCart));
+            stubExistingCartForUpdate(existingCart);
             when(cartItemRepository.findByCart_CartIdAndProduct_ProductId(CART_ID, PRODUCT_ID)).thenReturn(Optional.empty());
             when(cartItemRepository.save(any(CartItem.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -340,7 +395,7 @@ class CartServiceImplTest {
             final Cart cart = sampleCart();
             final Product product = sampleProduct();
             final CartItem existingItem = sampleCartItem(cart, product, 3);
-            when(cartRepository.findByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(cart));
+            stubExistingCartForUpdate(cart);
             when(cartItemRepository.findByCart_CartIdAndProduct_ProductId(CART_ID, PRODUCT_ID))
                     .thenReturn(Optional.of(existingItem));
             when(cartItemRepository.save(existingItem)).thenReturn(existingItem);
@@ -348,6 +403,9 @@ class CartServiceImplTest {
             final CartItemResponse response = service.addItem(SUBJECT, new AddCartItemRequest(PRODUCT_ID, 4));
 
             assertThat(response.quantity()).isEqualTo(7);
+            final var inOrder = inOrder(cartRepository, cartItemRepository);
+            inOrder.verify(cartRepository).findByCustomerIdForUpdate(CUSTOMER_ID);
+            inOrder.verify(cartItemRepository).findByCart_CartIdAndProduct_ProductId(CART_ID, PRODUCT_ID);
         }
 
         @Test
@@ -358,7 +416,7 @@ class CartServiceImplTest {
             final CartItem existingItem = sampleCartItem(cart, product, 3);
             when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
             when(productRepository.findActiveById(PRODUCT_ID)).thenReturn(Optional.of(product));
-            when(cartRepository.findByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(cart));
+            stubExistingCartForUpdate(cart);
             when(cartItemRepository.findByCart_CartIdAndProduct_ProductId(CART_ID, PRODUCT_ID))
                     .thenReturn(Optional.of(existingItem));
 
@@ -378,7 +436,7 @@ class CartServiceImplTest {
             stubCustomerAndProduct();
             final Cart cart = sampleCart();
             final Product product = sampleProduct();
-            when(cartRepository.findByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(cart));
+            stubExistingCartForUpdate(cart);
             when(cartItemRepository.findByCart_CartIdAndProduct_ProductId(CART_ID, PRODUCT_ID))
                     .thenReturn(Optional.of(sampleCartItem(cart, product, 999)));
 
@@ -399,7 +457,7 @@ class CartServiceImplTest {
                     .isInstanceOf(ResourceNotFoundException.class)
                     .hasMessageContaining("Product");
 
-            verify(cartRepository, never()).findByCustomerId(any());
+            verify(cartRepository, never()).findByCustomerIdForUpdate(any());
             verify(cartRepository, never()).save(any());
             verify(cartItemRepository, never()).save(any());
         }
@@ -426,6 +484,7 @@ class CartServiceImplTest {
             final Product product = sampleProduct();
             final CartItem item = sampleCartItem(cart, product, 3);
             when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
+            stubExistingCartForUpdate(cart);
             when(cartItemRepository.findByCart_CustomerIdAndCartItemId(CUSTOMER_ID, 1000L))
                     .thenReturn(Optional.of(item));
             when(cartItemRepository.save(item)).thenReturn(item);
@@ -444,6 +503,7 @@ class CartServiceImplTest {
             final Product product = sampleProduct(5);
             final CartItem item = sampleCartItem(cart, product, 3);
             when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
+            stubExistingCartForUpdate(cart);
             when(cartItemRepository.findByCart_CustomerIdAndCartItemId(CUSTOMER_ID, 1000L))
                     .thenReturn(Optional.of(item));
             when(cartItemRepository.save(item)).thenReturn(item);
@@ -456,6 +516,27 @@ class CartServiceImplTest {
             assertThat(product.getInventory().getReservedQuantity()).isZero();
         }
 
+        @ParameterizedTest
+        @ValueSource(ints = {0, -1})
+        @DisplayName("non-positive replacement quantity is rejected without changing CartItem")
+        void updateItemQuantity_shouldReject_whenQuantityIsNotPositive(final int quantity) {
+            final Cart cart = sampleCart();
+            final Product product = sampleProduct(5);
+            final CartItem item = sampleCartItem(cart, product, 3);
+            when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
+            stubExistingCartForUpdate(cart);
+            when(cartItemRepository.findByCart_CustomerIdAndCartItemId(CUSTOMER_ID, 1000L))
+                    .thenReturn(Optional.of(item));
+
+            assertThatThrownBy(() -> service.updateItemQuantity(
+                    SUBJECT, 1000L, new UpdateCartItemQuantityRequest(quantity)))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("Cart item quantity must be at least 1");
+
+            assertThat(item.getQuantity()).isEqualTo(3);
+            verify(cartItemRepository, never()).save(any());
+        }
+
         @Test
         @DisplayName("update quantity over available stock is rejected without changing quantity")
         void updateItemQuantity_shouldRejectAndKeepOldQuantity_whenQuantityExceedsStock() {
@@ -463,6 +544,7 @@ class CartServiceImplTest {
             final Product product = sampleProduct(5);
             final CartItem item = sampleCartItem(cart, product, 3);
             when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
+            stubExistingCartForUpdate(cart);
             when(cartItemRepository.findByCart_CustomerIdAndCartItemId(CUSTOMER_ID, 1000L))
                     .thenReturn(Optional.of(item));
 
@@ -481,6 +563,7 @@ class CartServiceImplTest {
         @DisplayName("missing CartItem is rejected")
         void updateItemQuantity_shouldThrow_whenCartItemMissing() {
             when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
+            stubExistingCartForUpdate(sampleCart());
             when(cartItemRepository.findByCart_CustomerIdAndCartItemId(CUSTOMER_ID, 404L))
                     .thenReturn(Optional.empty());
 
@@ -496,6 +579,7 @@ class CartServiceImplTest {
         @DisplayName("not-owned CartItem is rejected as not found")
         void updateItemQuantity_shouldThrowNotFound_whenCartItemBelongsToAnotherCustomer() {
             when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
+            stubExistingCartForUpdate(sampleCart());
             when(cartItemRepository.findByCart_CustomerIdAndCartItemId(CUSTOMER_ID, 2000L))
                     .thenReturn(Optional.empty());
 
@@ -516,8 +600,10 @@ class CartServiceImplTest {
         @DisplayName("owned CartItem is deleted")
         void removeItem_shouldDelete_whenItemBelongsToCustomer() {
             final Product product = sampleProduct(5);
-            final CartItem item = sampleCartItem(sampleCart(), product, 3);
+            final Cart cart = sampleCart();
+            final CartItem item = sampleCartItem(cart, product, 3);
             when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
+            stubExistingCartForUpdate(cart);
             when(cartItemRepository.findByCart_CustomerIdAndCartItemId(CUSTOMER_ID, 1000L))
                     .thenReturn(Optional.of(item));
 
@@ -533,6 +619,7 @@ class CartServiceImplTest {
         @DisplayName("missing or not-owned CartItem is rejected as not found")
         void removeItem_shouldThrowNotFound_whenCartItemMissingOrNotOwned() {
             when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
+            stubExistingCartForUpdate(sampleCart());
             when(cartItemRepository.findByCart_CustomerIdAndCartItemId(CUSTOMER_ID, 2000L))
                     .thenReturn(Optional.empty());
 
