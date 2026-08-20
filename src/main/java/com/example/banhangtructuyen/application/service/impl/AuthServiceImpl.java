@@ -5,7 +5,9 @@ import com.example.banhangtructuyen.application.dto.auth.RegisterResponse;
 import com.example.banhangtructuyen.application.service.AuthService;
 import com.example.banhangtructuyen.application.service.KeycloakAdminService;
 import com.example.banhangtructuyen.domain.exception.EmailAlreadyExistsException;
+import com.example.banhangtructuyen.domain.model.Cart;
 import com.example.banhangtructuyen.domain.model.Customer;
+import com.example.banhangtructuyen.domain.repository.CartRepository;
 import com.example.banhangtructuyen.domain.repository.CustomerRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -18,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class AuthServiceImpl implements AuthService {
 
     private final CustomerRepository customerRepository;
+    private final CartRepository cartRepository;
     private final PasswordEncoder passwordEncoder;
     private final KeycloakAdminService keycloakAdminService;
 
@@ -44,6 +47,10 @@ public class AuthServiceImpl implements AuthService {
                     .build();
 
             final Customer saved = customerRepository.save(customer);
+            cartRepository.save(Cart.builder()
+                    .customerId(saved.getCustomerId())
+                    .build());
+            cartRepository.flush();
 
             return new RegisterResponse(
                     saved.getCustomerId(),
