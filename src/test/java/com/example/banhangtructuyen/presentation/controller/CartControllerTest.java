@@ -6,6 +6,7 @@ import com.example.banhangtructuyen.application.dto.cart.CartResponse;
 import com.example.banhangtructuyen.application.dto.cart.CartViewItemResponse;
 import com.example.banhangtructuyen.application.dto.cart.UpdateCartItemQuantityRequest;
 import com.example.banhangtructuyen.application.service.CartService;
+import com.example.banhangtructuyen.domain.exception.InsufficientInventoryException;
 import com.example.banhangtructuyen.domain.exception.ResourceNotFoundException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
@@ -35,6 +36,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+/**
+ * MockMvc controller tests for {@link CartController}.
+ *
+ * <p>ATS-14: Verifies that insufficient inventory is returned as HTTP 422 Unprocessable Entity
+ * (not 400 Bad Request) when {@link InsufficientInventoryException} is thrown by the service.
+ */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
@@ -138,7 +145,7 @@ class CartControllerTest {
     }
 
     @Test
-    @DisplayName("quantity invalid returns 400")
+    @DisplayName("quantity invalid (0) returns 400")
     void addItem_shouldReturn400_whenQuantityInvalid() throws Exception {
         mockMvc.perform(post("/api/v1/cart/items")
                         .with(customerJwt())
@@ -162,19 +169,23 @@ class CartControllerTest {
                 .andExpect(jsonPath("$.success").value(false));
     }
 
+    /**
+     * ATS-14: Insufficient inventory returns HTTP 422 Unprocessable Entity.
+     * This is the core ATS-14 controller-level verification.
+     */
     @Test
-    @DisplayName("quantity over available stock returns 400")
-    void addItem_shouldReturn400_whenQuantityExceedsAvailableStock() throws Exception {
+    @DisplayName("ATS-14 — quantity over available stock returns 422 Unprocessable Entity")
+    void addItem_shouldReturn422_whenQuantityExceedsAvailableStock() throws Exception {
         when(cartService.addItem(eq(SUBJECT), any(AddCartItemRequest.class)))
-                .thenThrow(new IllegalArgumentException("Requested quantity exceeds available stock"));
+                .thenThrow(new InsufficientInventoryException(10L, 4, 3));
 
         mockMvc.perform(post("/api/v1/cart/items")
                         .with(customerJwt())
                         .contentType("application/json")
                         .content(toJson(new AddCartItemRequest(10L, 4))))
-                .andExpect(status().isBadRequest())
+                .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.message").value("Requested quantity exceeds available stock"));
+                .andExpect(jsonPath("$.message").isNotEmpty());
     }
 
     @Test
@@ -253,19 +264,22 @@ class CartControllerTest {
                 .andExpect(jsonPath("$.success").value(false));
     }
 
+    /**
+     * ATS-14: Update quantity over available stock returns HTTP 422 Unprocessable Entity.
+     */
     @Test
-    @DisplayName("update quantity over available stock returns 400")
-    void updateItemQuantity_shouldReturn400_whenQuantityExceedsAvailableStock() throws Exception {
+    @DisplayName("ATS-14 — update quantity over available stock returns 422 Unprocessable Entity")
+    void updateItemQuantity_shouldReturn422_whenQuantityExceedsAvailableStock() throws Exception {
         when(cartService.updateItemQuantity(eq(SUBJECT), eq(1L), any(UpdateCartItemQuantityRequest.class)))
-                .thenThrow(new IllegalArgumentException("Requested quantity exceeds available stock"));
+                .thenThrow(new InsufficientInventoryException(10L, 6, 5));
 
         mockMvc.perform(put("/api/v1/cart/items/1")
                         .with(customerJwt())
                         .contentType("application/json")
                         .content(toJson(new UpdateCartItemQuantityRequest(6))))
-                .andExpect(status().isBadRequest())
+                .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.message").value("Requested quantity exceeds available stock"));
+                .andExpect(jsonPath("$.message").isNotEmpty());
     }
 
     @Test

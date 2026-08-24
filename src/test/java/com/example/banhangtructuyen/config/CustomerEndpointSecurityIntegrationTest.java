@@ -246,7 +246,7 @@ class CustomerEndpointSecurityIntegrationTest {
     @Test
     @DisplayName("product GET remains public")
     void productGet_remainsPublic() throws Exception {
-        when(productService.findAll(0, 20, null, null)).thenReturn(Page.empty());
+        when(productService.findAll(0, 20, null, null, null, null)).thenReturn(Page.empty());
 
         mockMvc.perform(get("/api/v1/products"))
                 .andExpect(status().isOk());

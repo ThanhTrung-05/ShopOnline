@@ -6,6 +6,7 @@ import com.example.banhangtructuyen.application.dto.cart.CartResponse;
 import com.example.banhangtructuyen.application.dto.cart.UpdateCartItemQuantityRequest;
 import com.example.banhangtructuyen.application.service.impl.CartServiceImpl;
 import com.example.banhangtructuyen.domain.exception.CustomerAccountNotActiveException;
+import com.example.banhangtructuyen.domain.exception.InsufficientInventoryException;
 import com.example.banhangtructuyen.domain.exception.ResourceNotFoundException;
 import com.example.banhangtructuyen.domain.model.Cart;
 import com.example.banhangtructuyen.domain.model.CartItem;
@@ -15,6 +16,7 @@ import com.example.banhangtructuyen.domain.model.Product;
 import com.example.banhangtructuyen.domain.repository.CartItemRepository;
 import com.example.banhangtructuyen.domain.repository.CartRepository;
 import com.example.banhangtructuyen.domain.repository.CustomerRepository;
+import com.example.banhangtructuyen.domain.repository.InventoryRepository;
 import com.example.banhangtructuyen.domain.repository.ProductRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -40,6 +42,12 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * Unit tests for {@link CartServiceImpl}.
+ *
+ * <p>ATS-14 coverage: All 8 business-rule scenarios for inventory validation are covered
+ * in the {@link AddItem} and {@link UpdateItemQuantity} nested classes.
+ */
 @ExtendWith(MockitoExtension.class)
 class CartServiceImplTest {
 
@@ -52,6 +60,7 @@ class CartServiceImplTest {
     @Mock private CartItemRepository cartItemRepository;
     @Mock private CustomerRepository customerRepository;
     @Mock private ProductRepository productRepository;
+    @Mock private InventoryRepository inventoryRepository;
 
     private CartServiceImpl service;
 
@@ -62,6 +71,7 @@ class CartServiceImplTest {
                 cartItemRepository,
                 customerRepository,
                 productRepository,
+                inventoryRepository,
                 new AuthenticatedCustomerResolver(customerRepository));
     }
 
@@ -107,6 +117,15 @@ class CartServiceImplTest {
                 .build();
         product.setInventory(inventory);
         return product;
+    }
+
+    /** Inventory object detached from a product — for InventoryRepository mock in updateItemQuantity tests. */
+    private static Inventory sampleInventory(final int quantity, final int reserved) {
+        return Inventory.builder()
+                .inventoryId(500L)
+                .quantity(quantity)
+                .reservedQuantity(reserved)
+                .build();
     }
 
     private static CartItem sampleCartItem(final Cart cart, final Product product, final int quantity) {
@@ -304,8 +323,9 @@ class CartServiceImplTest {
             assertThat(cartCaptor.getValue().getCustomerId()).isEqualTo(CUSTOMER_ID);
         }
 
+        // ── ATS-14 RULE 2: requestedQuantity < available → PASS ──────────
         @Test
-        @DisplayName("new item quantity below available stock succeeds")
+        @DisplayName("ATS-14 RULE 2 — new item quantity below available stock succeeds")
         void addItem_shouldSucceed_whenNewItemQuantityBelowStock() {
             final Product product = sampleProduct(5);
             when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
@@ -317,12 +337,14 @@ class CartServiceImplTest {
             final CartItemResponse response = service.addItem(SUBJECT, new AddCartItemRequest(PRODUCT_ID, 4));
 
             assertThat(response.quantity()).isEqualTo(4);
+            // ATS-14 RULE 6: No inventory deduction occurred
             assertThat(product.getInventory().getQuantity()).isEqualTo(5);
             assertThat(product.getInventory().getReservedQuantity()).isZero();
         }
 
+        // ── ATS-14 RULE 2: requestedQuantity = available → PASS ──────────
         @Test
-        @DisplayName("new item quantity equal to available stock succeeds")
+        @DisplayName("ATS-14 RULE 2 — new item quantity equal to available stock succeeds")
         void addItem_shouldSucceed_whenNewItemQuantityEqualsStock() {
             final Product product = sampleProduct(5);
             when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
@@ -334,13 +356,15 @@ class CartServiceImplTest {
             final CartItemResponse response = service.addItem(SUBJECT, new AddCartItemRequest(PRODUCT_ID, 5));
 
             assertThat(response.quantity()).isEqualTo(5);
+            // ATS-14 RULE 6: No inventory deduction occurred
             assertThat(product.getInventory().getQuantity()).isEqualTo(5);
             assertThat(product.getInventory().getReservedQuantity()).isZero();
         }
 
+        // ── ATS-14 RULE 3: quantity = 0 or < 0 → REJECT ─────────────────
         @ParameterizedTest
         @ValueSource(ints = {0, -1})
-        @DisplayName("non-positive add quantity is rejected before Cart mutation")
+        @DisplayName("ATS-14 RULE 3 — non-positive add quantity is rejected before Cart mutation")
         void addItem_shouldReject_whenQuantityIsNotPositive(final int quantity) {
             final Product product = sampleProduct(5);
             when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
@@ -356,22 +380,40 @@ class CartServiceImplTest {
             verify(cartItemRepository, never()).save(any());
         }
 
+        // ── ATS-14 RULE 2: requestedQuantity > available → REJECT ────────
         @Test
-        @DisplayName("new item quantity over available stock is rejected without creating cart or item")
-        void addItem_shouldRejectAndNotCreateCartOrItem_whenNewItemQuantityExceedsStock() {
+        @DisplayName("ATS-14 RULE 2 — new item quantity over available stock is rejected (InsufficientInventoryException)")
+        void addItem_shouldRejectWithInsufficientInventory_whenNewItemQuantityExceedsStock() {
             final Product product = sampleProduct(3);
             when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
             when(productRepository.findActiveById(PRODUCT_ID)).thenReturn(Optional.of(product));
 
             assertThatThrownBy(() -> service.addItem(SUBJECT, new AddCartItemRequest(PRODUCT_ID, 4)))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessage("Requested quantity exceeds available stock");
+                    .isInstanceOf(InsufficientInventoryException.class);
 
             verify(cartRepository, never()).save(any());
             verify(cartRepository, never()).findByCustomerIdForUpdate(any());
             verify(cartItemRepository, never()).save(any());
+            // ATS-14 RULE 6: No inventory deduction occurred
             assertThat(product.getInventory().getQuantity()).isEqualTo(3);
             assertThat(product.getInventory().getReservedQuantity()).isZero();
+        }
+
+        @Test
+        @DisplayName("ATS-14 RULE 2 — InsufficientInventoryException carries correct productId/requested/available")
+        void addItem_insufficientInventory_exceptionHasCorrectDetails() {
+            final Product product = sampleProduct(3); // available = 3
+            when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
+            when(productRepository.findActiveById(PRODUCT_ID)).thenReturn(Optional.of(product));
+
+            final InsufficientInventoryException ex = (InsufficientInventoryException)
+                    org.assertj.core.api.Assertions.catchThrowable(
+                            () -> service.addItem(SUBJECT, new AddCartItemRequest(PRODUCT_ID, 10)));
+
+            assertThat(ex).isInstanceOf(InsufficientInventoryException.class);
+            assertThat(ex.getProductId()).isEqualTo(PRODUCT_ID);
+            assertThat(ex.getRequested()).isEqualTo(10);
+            assertThat(ex.getAvailable()).isEqualTo(3);
         }
 
         @Test
@@ -409,7 +451,7 @@ class CartServiceImplTest {
         }
 
         @Test
-        @DisplayName("existing item resulting quantity over available stock is rejected without changing quantity")
+        @DisplayName("ATS-14 RULE 2 — existing item resulting quantity over available stock is rejected without changing quantity")
         void addItem_shouldRejectAndKeepOldQuantity_whenResultingQuantityExceedsStock() {
             final Cart cart = sampleCart();
             final Product product = sampleProduct(5);
@@ -421,11 +463,11 @@ class CartServiceImplTest {
                     .thenReturn(Optional.of(existingItem));
 
             assertThatThrownBy(() -> service.addItem(SUBJECT, new AddCartItemRequest(PRODUCT_ID, 3)))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessage("Requested quantity exceeds available stock");
+                    .isInstanceOf(InsufficientInventoryException.class);
 
             assertThat(existingItem.getQuantity()).isEqualTo(3);
             verify(cartItemRepository, never()).save(any());
+            // ATS-14 RULE 6: No inventory deduction occurred
             assertThat(product.getInventory().getQuantity()).isEqualTo(5);
             assertThat(product.getInventory().getReservedQuantity()).isZero();
         }
@@ -447,8 +489,9 @@ class CartServiceImplTest {
             verify(cartItemRepository, never()).save(any());
         }
 
+        // ── ATS-14 RULE 4: product not active/existing ───────────────────
         @Test
-        @DisplayName("Product not found or inactive is rejected without creating Cart")
+        @DisplayName("ATS-14 RULE 4 — Product not found or inactive is rejected without creating Cart")
         void addItem_shouldThrowAndNotCreateCart_whenProductNotFoundOrInactive() {
             when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
             when(productRepository.findActiveById(PRODUCT_ID)).thenReturn(Optional.empty());
@@ -471,14 +514,47 @@ class CartServiceImplTest {
                     .isInstanceOf(ResourceNotFoundException.class)
                     .hasMessageContaining("Customer");
         }
+
+        // ── ATS-14 RULE 5: inventory = 0 → all requests rejected ─────────
+        @Test
+        @DisplayName("ATS-14 RULE 2 — product with zero available stock rejects any quantity")
+        void addItem_shouldReject_whenInventoryIsZero() {
+            final Product product = sampleProduct(0);
+            when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
+            when(productRepository.findActiveById(PRODUCT_ID)).thenReturn(Optional.of(product));
+
+            assertThatThrownBy(() -> service.addItem(SUBJECT, new AddCartItemRequest(PRODUCT_ID, 1)))
+                    .isInstanceOf(InsufficientInventoryException.class);
+
+            verify(cartRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("ATS-14 RULE 5 — product with no inventory record rejects any quantity")
+        void addItem_shouldReject_whenProductHasNoInventoryRecord() {
+            final Product product = Product.builder()
+                    .productId(PRODUCT_ID)
+                    .productName("No Inventory Product")
+                    .price(new BigDecimal("5000.00"))
+                    .status(Product.ProductStatus.ACTIVE)
+                    .build(); // no inventory set → null
+            when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
+            when(productRepository.findActiveById(PRODUCT_ID)).thenReturn(Optional.of(product));
+
+            assertThatThrownBy(() -> service.addItem(SUBJECT, new AddCartItemRequest(PRODUCT_ID, 1)))
+                    .isInstanceOf(InsufficientInventoryException.class);
+
+            verify(cartRepository, never()).save(any());
+        }
     }
 
     @Nested
     @DisplayName("updateItemQuantity")
     class UpdateItemQuantity {
 
+        // ── ATS-14 RULE 2: requestedQuantity < available → PASS ──────────
         @Test
-        @DisplayName("owned CartItem quantity is replaced")
+        @DisplayName("ATS-14 RULE 2 — owned CartItem quantity is replaced when below available stock")
         void updateItemQuantity_shouldReplaceQuantity_whenItemBelongsToCustomer() {
             final Cart cart = sampleCart();
             final Product product = sampleProduct();
@@ -487,6 +563,9 @@ class CartServiceImplTest {
             stubExistingCartForUpdate(cart);
             when(cartItemRepository.findByCart_CustomerIdAndCartItemId(CUSTOMER_ID, 1000L))
                     .thenReturn(Optional.of(item));
+            // ATS-14: fresh inventory re-fetch from InventoryRepository
+            when(inventoryRepository.findByProduct_ProductId(PRODUCT_ID))
+                    .thenReturn(Optional.of(sampleInventory(10, 0))); // available = 10
             when(cartItemRepository.save(item)).thenReturn(item);
 
             final CartItemResponse response = service.updateItemQuantity(
@@ -496,8 +575,9 @@ class CartServiceImplTest {
             verify(productRepository, never()).findActiveById(any());
         }
 
+        // ── ATS-14 RULE 2: requestedQuantity = available → PASS ──────────
         @Test
-        @DisplayName("update quantity equal to available stock succeeds")
+        @DisplayName("ATS-14 RULE 2 — update quantity equal to available stock succeeds")
         void updateItemQuantity_shouldSucceed_whenQuantityEqualsStock() {
             final Cart cart = sampleCart();
             final Product product = sampleProduct(5);
@@ -506,19 +586,24 @@ class CartServiceImplTest {
             stubExistingCartForUpdate(cart);
             when(cartItemRepository.findByCart_CustomerIdAndCartItemId(CUSTOMER_ID, 1000L))
                     .thenReturn(Optional.of(item));
+            // ATS-14: fresh inventory re-fetch
+            when(inventoryRepository.findByProduct_ProductId(PRODUCT_ID))
+                    .thenReturn(Optional.of(sampleInventory(5, 0))); // available = 5
             when(cartItemRepository.save(item)).thenReturn(item);
 
             final CartItemResponse response = service.updateItemQuantity(
                     SUBJECT, 1000L, new UpdateCartItemQuantityRequest(5));
 
             assertThat(response.quantity()).isEqualTo(5);
+            // ATS-14 RULE 6: No inventory deduction
             assertThat(product.getInventory().getQuantity()).isEqualTo(5);
             assertThat(product.getInventory().getReservedQuantity()).isZero();
         }
 
+        // ── ATS-14 RULE 3: quantity = 0 or < 0 → REJECT ─────────────────
         @ParameterizedTest
         @ValueSource(ints = {0, -1})
-        @DisplayName("non-positive replacement quantity is rejected without changing CartItem")
+        @DisplayName("ATS-14 RULE 3 — non-positive replacement quantity is rejected without changing CartItem")
         void updateItemQuantity_shouldReject_whenQuantityIsNotPositive(final int quantity) {
             final Cart cart = sampleCart();
             final Product product = sampleProduct(5);
@@ -537,9 +622,10 @@ class CartServiceImplTest {
             verify(cartItemRepository, never()).save(any());
         }
 
+        // ── ATS-14 RULE 2: requestedQuantity > available → REJECT ────────
         @Test
-        @DisplayName("update quantity over available stock is rejected without changing quantity")
-        void updateItemQuantity_shouldRejectAndKeepOldQuantity_whenQuantityExceedsStock() {
+        @DisplayName("ATS-14 RULE 2 — update quantity over available stock is rejected (InsufficientInventoryException)")
+        void updateItemQuantity_shouldRejectWithInsufficientInventory_whenQuantityExceedsStock() {
             final Cart cart = sampleCart();
             final Product product = sampleProduct(5);
             final CartItem item = sampleCartItem(cart, product, 3);
@@ -547,16 +633,43 @@ class CartServiceImplTest {
             stubExistingCartForUpdate(cart);
             when(cartItemRepository.findByCart_CustomerIdAndCartItemId(CUSTOMER_ID, 1000L))
                     .thenReturn(Optional.of(item));
+            // ATS-14: fresh inventory re-fetch returns only 5 available
+            when(inventoryRepository.findByProduct_ProductId(PRODUCT_ID))
+                    .thenReturn(Optional.of(sampleInventory(5, 0)));
 
             assertThatThrownBy(() -> service.updateItemQuantity(
                     SUBJECT, 1000L, new UpdateCartItemQuantityRequest(6)))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessage("Requested quantity exceeds available stock");
+                    .isInstanceOf(InsufficientInventoryException.class);
 
             assertThat(item.getQuantity()).isEqualTo(3);
             verify(cartItemRepository, never()).save(any());
+            // ATS-14 RULE 6: No inventory deduction
             assertThat(product.getInventory().getQuantity()).isEqualTo(5);
             assertThat(product.getInventory().getReservedQuantity()).isZero();
+        }
+
+        @Test
+        @DisplayName("ATS-14 RULE 5 — updateItemQuantity uses InventoryRepository for real-time re-fetch")
+        void updateItemQuantity_usesInventoryRepository_forRealTimeCheck() {
+            final Cart cart = sampleCart();
+            final Product product = sampleProduct(100); // product entity has qty=100, but DB may differ
+            final CartItem item = sampleCartItem(cart, product, 3);
+            when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
+            stubExistingCartForUpdate(cart);
+            when(cartItemRepository.findByCart_CustomerIdAndCartItemId(CUSTOMER_ID, 1000L))
+                    .thenReturn(Optional.of(item));
+            // ATS-14: fresh inventory shows only 2 available (stock sold concurrently)
+            when(inventoryRepository.findByProduct_ProductId(PRODUCT_ID))
+                    .thenReturn(Optional.of(sampleInventory(2, 0)));
+
+            // Requesting 5 while only 2 available after real-time re-fetch
+            assertThatThrownBy(() -> service.updateItemQuantity(
+                    SUBJECT, 1000L, new UpdateCartItemQuantityRequest(5)))
+                    .isInstanceOf(InsufficientInventoryException.class);
+
+            // Verify InventoryRepository was called (real-time DB read)
+            verify(inventoryRepository).findByProduct_ProductId(PRODUCT_ID);
+            verify(cartItemRepository, never()).save(any());
         }
 
         @Test
@@ -611,6 +724,8 @@ class CartServiceImplTest {
 
             verify(cartItemRepository).delete(item);
             verify(productRepository, never()).findActiveById(any());
+            verify(inventoryRepository, never()).findByProduct_ProductId(any());
+            // ATS-14 RULE 6: No inventory deduction
             assertThat(product.getInventory().getQuantity()).isEqualTo(5);
             assertThat(product.getInventory().getReservedQuantity()).isZero();
         }

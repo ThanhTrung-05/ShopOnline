@@ -462,7 +462,7 @@ class ProductControllerTest {
         }
     }
 
-<<<<<<< HEAD
+
     // ══════════════════════════════════════════════════════════════════════
     // GET /api/v1/products/admin/products — Admin product management list
     // ══════════════════════════════════════════════════════════════════════
@@ -542,13 +542,15 @@ class ProductControllerTest {
                             new java.math.BigDecimal("100000"), null, "ACTIVE", 10));
 
             mockMvc.perform(post("/api/v1/products")
+                            .header(org.springframework.http.HttpHeaders.AUTHORIZATION, bearer(ADMIN_TOKEN))
                             .contentType("application/json")
                             .content(body))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.success").value(false))
                     .andExpect(jsonPath("$.message").value(containsString("Only 5% and 10% are allowed")));
         }
-=======
+    }
+
     private static String bearer(final String token) {
         return "Bearer " + token;
     }
@@ -563,6 +565,6 @@ class ProductControllerTest {
                 .audience(List.of(CLIENT_ID))
                 .claim("resource_access", Map.of(CLIENT_ID, Map.of("roles", roles)))
                 .build();
->>>>>>> 2e744a0ec2370b770aff69565021da8d47088517
+
     }
 }

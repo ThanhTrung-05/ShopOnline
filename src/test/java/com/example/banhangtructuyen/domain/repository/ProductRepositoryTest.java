@@ -210,7 +210,8 @@ class ProductRepositoryTest {
 
         // Simulate soft delete
         product.setStatus(Product.ProductStatus.DELETED);
-        entityManager.persistAndFlush(product);
+        entityManager.merge(product);
+        entityManager.flush();
         entityManager.clear();
 
         assertThat(productRepository.findActiveById(product.getProductId())).isEmpty();

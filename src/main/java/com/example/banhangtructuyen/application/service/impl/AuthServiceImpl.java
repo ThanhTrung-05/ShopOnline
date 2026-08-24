@@ -7,13 +7,12 @@ import com.example.banhangtructuyen.application.dto.auth.RegisterResponse;
 import com.example.banhangtructuyen.application.service.AuthService;
 import com.example.banhangtructuyen.application.service.KeycloakAdminService;
 import com.example.banhangtructuyen.domain.exception.EmailAlreadyExistsException;
-<<<<<<< HEAD
 import com.example.banhangtructuyen.domain.exception.InvalidCredentialsException;
 import com.example.banhangtructuyen.domain.model.Customer;
-=======
 import com.example.banhangtructuyen.domain.exception.KeycloakProvisioningException;
 import com.example.banhangtructuyen.domain.exception.RegistrationProvisioningException;
->>>>>>> 2e744a0ec2370b770aff69565021da8d47088517
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.annotation.Transactional;
 import com.example.banhangtructuyen.domain.repository.CustomerRepository;
 import com.example.banhangtructuyen.infrastructure.security.JwtService;
 import lombok.RequiredArgsConstructor;
@@ -27,13 +26,10 @@ import org.springframework.stereotype.Service;
 public class AuthServiceImpl implements AuthService {
 
     private final CustomerRepository customerRepository;
-<<<<<<< HEAD
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
-=======
     private final CustomerRegistrationPersistenceService registrationPersistenceService;
     private final KeycloakAdminService keycloakAdminService;
->>>>>>> 2e744a0ec2370b770aff69565021da8d47088517
 
     @Override
     public RegisterResponse register(final RegisterRequest request) {

@@ -94,6 +94,7 @@ class ProductServiceTest {
                 .categoryId(1L)
                 .categoryCode("THUC_PHAM")
                 .categoryName("Thực phẩm")
+                .vatRate(new BigDecimal("10.00"))
                 .status(Category.CategoryStatus.ACTIVE)
                 .build();
 
