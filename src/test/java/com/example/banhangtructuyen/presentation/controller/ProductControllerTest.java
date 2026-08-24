@@ -96,7 +96,7 @@ class ProductControllerTest {
         @DisplayName("200 — default pagination, returns product list")
         void listProducts_shouldReturn200_withDefaultPagination() throws Exception {
             // Arrange
-            when(productService.findAll(0, 20, null, null))
+            when(productService.findAll(0, 20, null, null, null, null))
                     .thenReturn(singleProductPage(sampleProduct()));
 
             // Act + Assert
@@ -120,7 +120,7 @@ class ProductControllerTest {
         @DisplayName("200 — filtered by category ID")
         void listProducts_shouldReturn200_withCategoryFilter() throws Exception {
             // Arrange
-            when(productService.findAll(0, 20, 1L, null))
+            when(productService.findAll(0, 20, 1L, null, null, null))
                     .thenReturn(singleProductPage(sampleProduct()));
 
             // Act + Assert
@@ -135,7 +135,7 @@ class ProductControllerTest {
         @DisplayName("200 — filtered by search keyword")
         void listProducts_shouldReturn200_withSearchKeyword() throws Exception {
             // Arrange
-            when(productService.findAll(0, 20, null, "gạo"))
+            when(productService.findAll(0, 20, null, "gạo", null, null))
                     .thenReturn(singleProductPage(sampleProduct()));
 
             // Act + Assert
@@ -152,7 +152,7 @@ class ProductControllerTest {
             // Arrange
             final Page<ProductResponse> emptyPage = new PageImpl<>(
                     Collections.emptyList(), PageRequest.of(0, 20), 0L);
-            when(productService.findAll(0, 20, 2L, "nonexistent"))
+            when(productService.findAll(0, 20, 2L, "nonexistent", null, null))
                     .thenReturn(emptyPage);
 
             // Act + Assert
@@ -462,6 +462,93 @@ class ProductControllerTest {
         }
     }
 
+<<<<<<< HEAD
+    // ══════════════════════════════════════════════════════════════════════
+    // GET /api/v1/products/admin/products — Admin product management list
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Nested
+    @DisplayName("GET /api/v1/products/admin/products — Admin Product List (ATS-6)")
+    class AdminListProducts {
+
+        @Autowired
+        private ObjectMapper objectMapper;
+
+        @Test
+        @DisplayName("200 — returns all non-DELETED products for admin")
+        void adminList_shouldReturn200_withProducts() throws Exception {
+            final java.util.List<ProductResponse> products = java.util.List.of(
+                    new ProductResponse(1L, "Gạo ST25 5kg", "TP001",
+                            new java.math.BigDecimal("180000"), null, "desc",
+                            1L, "Thực phẩm", 100, "ACTIVE"),
+                    new ProductResponse(2L, "Sản phẩm tạm dừng", "TP002",
+                            new java.math.BigDecimal("50000"), null, null,
+                            1L, "Thực phẩm", 0, "INACTIVE")
+            );
+            final org.springframework.data.domain.Page<ProductResponse> page =
+                    new org.springframework.data.domain.PageImpl<>(products,
+                            org.springframework.data.domain.PageRequest.of(0, 20), 2L);
+
+            when(productService.findAllForAdmin(0, 20, null, null)).thenReturn(page);
+
+            mockMvc.perform(get("/api/v1/products/admin/products"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.success").value(true))
+                    .andExpect(jsonPath("$.data.content").isArray())
+                    .andExpect(jsonPath("$.data.content[0].status").value("ACTIVE"))
+                    .andExpect(jsonPath("$.data.content[1].status").value("INACTIVE"))
+                    .andExpect(jsonPath("$.data.totalElements").value(2));
+        }
+
+        @Test
+        @DisplayName("400 — page is negative")
+        void adminList_shouldReturn400_whenPageNegative() throws Exception {
+            mockMvc.perform(get("/api/v1/products/admin/products")
+                            .param("page", "-1"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.success").value(false));
+        }
+
+        @Test
+        @DisplayName("400 — size exceeds 100")
+        void adminList_shouldReturn400_whenSizeTooLarge() throws Exception {
+            mockMvc.perform(get("/api/v1/products/admin/products")
+                            .param("size", "999"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.success").value(false));
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // ATS-6 VAT validation via controller
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Nested
+    @DisplayName("ATS-6 VAT — Controller level VAT validation")
+    class VatControllerValidation {
+
+        @Autowired
+        private ObjectMapper objectMapper;
+
+        @Test
+        @DisplayName("400 — create rejected when category has invalid VAT rate")
+        void createProduct_invalidVat_returns400() throws Exception {
+            when(productService.create(any(ProductRequest.class)))
+                    .thenThrow(new IllegalArgumentException(
+                            "Invalid VAT rate 7% on category 'TestCat'. Only 5% and 10% are allowed."));
+
+            final String body = objectMapper.writeValueAsString(
+                    new ProductRequest("TestProd", "TP-VAT", 5L, null,
+                            new java.math.BigDecimal("100000"), null, "ACTIVE", 10));
+
+            mockMvc.perform(post("/api/v1/products")
+                            .contentType("application/json")
+                            .content(body))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.success").value(false))
+                    .andExpect(jsonPath("$.message").value(containsString("Only 5% and 10% are allowed")));
+        }
+=======
     private static String bearer(final String token) {
         return "Bearer " + token;
     }
@@ -476,5 +563,6 @@ class ProductControllerTest {
                 .audience(List.of(CLIENT_ID))
                 .claim("resource_access", Map.of(CLIENT_ID, Map.of("roles", roles)))
                 .build();
+>>>>>>> 2e744a0ec2370b770aff69565021da8d47088517
     }
 }

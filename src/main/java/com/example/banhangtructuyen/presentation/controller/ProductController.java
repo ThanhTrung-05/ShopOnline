@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
@@ -20,6 +21,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+
+import java.math.BigDecimal;
 
 /**
  * Public REST controller for the product catalog.
@@ -71,9 +74,15 @@ public class ProductController {
             @RequestParam(required = false) @Min(value = 1, message = "Category ID must be at least 1") Long categoryId,
 
             @Parameter(description = "Keyword to search in product name (case-insensitive)", example = "gạo")
-            @RequestParam(required = false) @Size(max = 100, message = "Search keyword must not exceed 100 characters") String search) {
+            @RequestParam(required = false) @Size(max = 100, message = "Search keyword must not exceed 100 characters") String search,
 
-        final Page<ProductResponse> result = productService.findAll(page, size, categoryId, search);
+            @Parameter(description = "Minimum price filter (inclusive)", example = "10000")
+            @RequestParam(required = false) @DecimalMin(value = "0", message = "Minimum price must be 0 or greater") BigDecimal minPrice,
+
+            @Parameter(description = "Maximum price filter (inclusive)", example = "500000")
+            @RequestParam(required = false) @DecimalMin(value = "0", message = "Maximum price must be 0 or greater") BigDecimal maxPrice) {
+
+        final Page<ProductResponse> result = productService.findAll(page, size, categoryId, search, minPrice, maxPrice);
         return ResponseEntity.ok(com.example.banhangtructuyen.application.dto.ApiResponse.success(result));
     }
 
@@ -149,5 +158,40 @@ public class ProductController {
             @PathVariable @Min(value = 1, message = "Product ID must be at least 1") Long id) {
         productService.delete(id);
         return ResponseEntity.ok(com.example.banhangtructuyen.application.dto.ApiResponse.success(null));
+    }
+
+    /**
+     * Admin product management list — returns all non-DELETED products (ACTIVE + INACTIVE).
+     * Does NOT use Redis cache so admin always sees up-to-date data.
+     * Requires ROLE_ADMIN (enforced by SecurityConfig).
+     */
+    @Operation(
+        summary = "[Admin] List all products for management",
+        description = "Returns all non-DELETED products (ACTIVE and INACTIVE statuses) for admin management. "
+                    + "No caching — always returns live data. Requires ROLE_ADMIN. (ATS-6)"
+    )
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Admin product list returned successfully"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid pagination parameters"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized — JWT token required"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — ROLE_ADMIN required")
+    })
+    @GetMapping("/admin/products")
+    public ResponseEntity<com.example.banhangtructuyen.application.dto.ApiResponse<Page<ProductResponse>>> adminListProducts(
+            @Parameter(description = "Zero-indexed page number", example = "0")
+            @RequestParam(defaultValue = "0") @Min(value = 0, message = "Page must be 0 or greater") int page,
+
+            @Parameter(description = "Items per page (1–100)", example = "20")
+            @RequestParam(defaultValue = "20") @Min(value = 1, message = "Size must be at least 1")
+                                               @Max(value = 100, message = "Size must not exceed 100") int size,
+
+            @Parameter(description = "Filter by category ID", example = "1")
+            @RequestParam(required = false) @Min(value = 1, message = "Category ID must be at least 1") Long categoryId,
+
+            @Parameter(description = "Keyword search in product name", example = "gạo")
+            @RequestParam(required = false) @Size(max = 100, message = "Search keyword must not exceed 100 characters") String search) {
+
+        final Page<ProductResponse> result = productService.findAllForAdmin(page, size, categoryId, search);
+        return ResponseEntity.ok(com.example.banhangtructuyen.application.dto.ApiResponse.success(result));
     }
 }

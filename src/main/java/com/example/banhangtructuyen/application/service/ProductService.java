@@ -5,9 +5,12 @@ import com.example.banhangtructuyen.application.dto.product.ProductRequest;
 import com.example.banhangtructuyen.application.dto.product.ProductResponse;
 import org.springframework.data.domain.Page;
 
+import java.math.BigDecimal;
+
 public interface ProductService {
 
-    Page<ProductResponse> findAll(int page, int size, Long categoryId, String search);
+    Page<ProductResponse> findAll(int page, int size, Long categoryId, String search,
+                                  BigDecimal minPrice, BigDecimal maxPrice);
 
     /** Returns basic product info — used by ATS-2 product list. */
     ProductResponse findById(Long productId);
@@ -17,6 +20,12 @@ public interface ProductService {
      * Throws ResourceNotFoundException if product does not exist or is not ACTIVE.
      */
     ProductDetailResponse findDetailById(Long productId);
+
+    /**
+     * Returns all non-DELETED products (ACTIVE + INACTIVE) for admin management (ATS-6).
+     * No Redis caching — admin always reads fresh data.
+     */
+    Page<ProductResponse> findAllForAdmin(int page, int size, Long categoryId, String search);
 
     /** Creates a new product together with its linked inventory row (ATS-6). */
     ProductDetailResponse create(ProductRequest request);

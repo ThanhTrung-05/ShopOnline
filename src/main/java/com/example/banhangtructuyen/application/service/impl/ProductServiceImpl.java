@@ -48,8 +48,9 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public Page<ProductResponse> findAll(final int page, final int size,
-                                         final Long categoryId, final String search) {
-        final String cacheKey = CacheKeys.productList(page, size, categoryId, search);
+                                         final Long categoryId, final String search,
+                                         final BigDecimal minPrice, final BigDecimal maxPrice) {
+        final String cacheKey = CacheKeys.productList(page, size, categoryId, search, minPrice, maxPrice);
         final int ttl = appProperties.getRedis().getTtl().getProductList();
 
         // Cache-Aside: try cache first
@@ -72,7 +73,7 @@ public class ProductServiceImpl implements ProductService {
         log.debug("Cache MISS: {}", cacheKey);
         final Pageable pageable = PageRequest.of(page, size);
         final Page<Product> productPage = productRepository
-                .findActiveProducts(categoryId, search, pageable);
+                .findActiveProducts(categoryId, search, minPrice, maxPrice, pageable);
         final Page<ProductResponse> result = productPage.map(this::toResponse);
 
         // Populate cache
@@ -152,9 +153,17 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    public Page<ProductResponse> findAllForAdmin(final int page, final int size,
+                                                  final Long categoryId, final String search) {
+        final Pageable pageable = PageRequest.of(page, size);
+        return productRepository.findAllProducts(categoryId, search, pageable).map(this::toResponse);
+    }
+
+    @Override
     @Transactional
     public ProductDetailResponse create(final ProductRequest request) {
         final Category category = getCategoryOrThrow(request.categoryId());
+        validateCategoryVatRate(category);
 
         if (productRepository.existsByProductSlug(request.productSlug())) {
             throw new DuplicateResourceException(
@@ -188,6 +197,7 @@ public class ProductServiceImpl implements ProductService {
     @Transactional
     public ProductDetailResponse update(final Long productId, final ProductRequest request) {
         final Category category = getCategoryOrThrow(request.categoryId());
+        validateCategoryVatRate(category);
         final Product product = productRepository.findByIdWithInventory(productId)
                 .orElseThrow(() -> new ResourceNotFoundException("Product", productId));
 
@@ -230,6 +240,25 @@ public class ProductServiceImpl implements ProductService {
     private Category getCategoryOrThrow(final Long categoryId) {
         return categoryRepository.findById(categoryId)
                 .orElseThrow(() -> new ResourceNotFoundException("Category", categoryId));
+    }
+
+    /**
+     * ATS-6 business rule: only Vietnamese VAT rates 5% and 10% are allowed.
+     * The VAT rate is stored at category level (V7 migration).
+     * Throws {@link IllegalArgumentException} with HTTP 400 if the rate is unsupported.
+     */
+    private void validateCategoryVatRate(final Category category) {
+        final java.math.BigDecimal rate = category.getVatRate();
+        if (rate == null) {
+            throw new IllegalArgumentException(
+                    "Category '" + category.getCategoryName() + "' has no VAT rate configured.");
+        }
+        final int intRate = rate.stripTrailingZeros().intValueExact();
+        if (intRate != 5 && intRate != 10) {
+            throw new IllegalArgumentException(
+                    "Invalid VAT rate " + rate + "% on category '" + category.getCategoryName()
+                    + "'. Only 5% and 10% are allowed.");
+        }
     }
 
     /** Evict product cache after updates. */

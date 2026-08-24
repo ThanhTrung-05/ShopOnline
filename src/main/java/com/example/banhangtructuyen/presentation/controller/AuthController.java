@@ -1,6 +1,8 @@
 package com.example.banhangtructuyen.presentation.controller;
 
 import com.example.banhangtructuyen.application.dto.ApiResponse;
+import com.example.banhangtructuyen.application.dto.auth.LoginRequest;
+import com.example.banhangtructuyen.application.dto.auth.LoginResponse;
 import com.example.banhangtructuyen.application.dto.auth.RegisterRequest;
 import com.example.banhangtructuyen.application.dto.auth.RegisterResponse;
 import com.example.banhangtructuyen.application.service.AuthService;
@@ -48,5 +50,21 @@ public class AuthController {
     public ResponseEntity<ApiResponse<RegisterResponse>> register(@Valid @RequestBody final RegisterRequest request) {
         final RegisterResponse response = authService.register(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
+    }
+
+    @Operation(
+        summary = "Log in and obtain a JWT access token",
+        description = "Authenticates by email and password. On success returns a signed JWT to be sent "
+                    + "as 'Authorization: Bearer <token>' on subsequent admin requests."
+    )
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Login successful",
+            content = @Content(schema = @Schema(implementation = ApiResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Invalid email or password",
+            content = @Content(schema = @Schema(implementation = ApiResponse.class)))
+    })
+    @PostMapping("/login")
+    public ResponseEntity<ApiResponse<LoginResponse>> login(@Valid @RequestBody final LoginRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(authService.login(request)));
     }
 }
