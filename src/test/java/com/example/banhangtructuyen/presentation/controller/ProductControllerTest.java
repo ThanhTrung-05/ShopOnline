@@ -462,7 +462,6 @@ class ProductControllerTest {
         }
     }
 
-<<<<<<< HEAD
     // ══════════════════════════════════════════════════════════════════════
     // GET /api/v1/products/admin/products — Admin product management list
     // ══════════════════════════════════════════════════════════════════════
@@ -491,7 +490,8 @@ class ProductControllerTest {
 
             when(productService.findAllForAdmin(0, 20, null, null)).thenReturn(page);
 
-            mockMvc.perform(get("/api/v1/products/admin/products"))
+            mockMvc.perform(get("/api/v1/products/admin/products")
+                            .header(HttpHeaders.AUTHORIZATION, bearer(ADMIN_TOKEN)))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data.content").isArray())
@@ -504,6 +504,7 @@ class ProductControllerTest {
         @DisplayName("400 — page is negative")
         void adminList_shouldReturn400_whenPageNegative() throws Exception {
             mockMvc.perform(get("/api/v1/products/admin/products")
+                            .header(HttpHeaders.AUTHORIZATION, bearer(ADMIN_TOKEN))
                             .param("page", "-1"))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.success").value(false));
@@ -513,6 +514,7 @@ class ProductControllerTest {
         @DisplayName("400 — size exceeds 100")
         void adminList_shouldReturn400_whenSizeTooLarge() throws Exception {
             mockMvc.perform(get("/api/v1/products/admin/products")
+                            .header(HttpHeaders.AUTHORIZATION, bearer(ADMIN_TOKEN))
                             .param("size", "999"))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.success").value(false));
@@ -542,13 +544,15 @@ class ProductControllerTest {
                             new java.math.BigDecimal("100000"), null, "ACTIVE", 10));
 
             mockMvc.perform(post("/api/v1/products")
+                            .header(HttpHeaders.AUTHORIZATION, bearer(ADMIN_TOKEN))
                             .contentType("application/json")
                             .content(body))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.success").value(false))
                     .andExpect(jsonPath("$.message").value(containsString("Only 5% and 10% are allowed")));
         }
-=======
+    }
+
     private static String bearer(final String token) {
         return "Bearer " + token;
     }
@@ -563,6 +567,5 @@ class ProductControllerTest {
                 .audience(List.of(CLIENT_ID))
                 .claim("resource_access", Map.of(CLIENT_ID, Map.of("roles", roles)))
                 .build();
->>>>>>> 2e744a0ec2370b770aff69565021da8d47088517
     }
 }

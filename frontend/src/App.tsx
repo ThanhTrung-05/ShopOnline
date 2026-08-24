@@ -4,20 +4,8 @@ import { useAuth } from './auth/useAuth';
 import apiClient from './api/axios';
 import ProductsPage from './pages/ProductsPage';
 import ProductDetailPage from './pages/ProductDetailPage';
-<<<<<<< HEAD
 import AdminProductPage from './pages/AdminProductPage';
 import AdminCategoryPage from './pages/AdminCategoryPage';
-
-export default function App() {
-  return (
-    <Routes>
-      <Route path="/" element={<Navigate to="/products" replace />} />
-      <Route path="/products" element={<ProductsPage />} />
-      <Route path="/products/:id" element={<ProductDetailPage />} />
-      <Route path="/admin/products" element={<AdminProductPage />} />
-      <Route path="/admin/categories" element={<AdminCategoryPage />} />
-    </Routes>
-=======
 import { useAuthStore } from './store/authStore';
 import { useCartStore } from './store/cartStore';
 
@@ -102,8 +90,9 @@ export default function App() {
         <Route path="/" element={<Navigate to="/products" replace />} />
         <Route path="/products" element={<ProductsPage />} />
         <Route path="/products/:id" element={<ProductDetailPage />} />
+        <Route path="/admin/products" element={<AdminProductPage />} />
+        <Route path="/admin/categories" element={<AdminCategoryPage />} />
       </Routes>
     </>
->>>>>>> 2e744a0ec2370b770aff69565021da8d47088517
   );
 }

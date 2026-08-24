@@ -1,18 +1,12 @@
 package com.example.banhangtructuyen.presentation.exception;
 
 import com.example.banhangtructuyen.application.dto.ApiResponse;
-<<<<<<< HEAD
-import com.example.banhangtructuyen.domain.exception.DuplicateResourceException;
-import com.example.banhangtructuyen.domain.exception.EmailAlreadyExistsException;
-import com.example.banhangtructuyen.domain.exception.InvalidCredentialsException;
-=======
 import com.example.banhangtructuyen.domain.exception.CustomerAccountNotActiveException;
 import com.example.banhangtructuyen.domain.exception.DuplicateResourceException;
 import com.example.banhangtructuyen.domain.exception.EmailAlreadyExistsException;
 import com.example.banhangtructuyen.domain.exception.KeycloakProvisioningException;
 import com.example.banhangtructuyen.domain.exception.RegistrationProvisioningException;
 import com.example.banhangtructuyen.domain.exception.ResourceInUseException;
->>>>>>> 2e744a0ec2370b770aff69565021da8d47088517
 import com.example.banhangtructuyen.domain.exception.ResourceNotFoundException;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -23,7 +17,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice
-public class                                            GlobalExceptionHandler {
+public class GlobalExceptionHandler {
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleNotFound(final ResourceNotFoundException ex) {
@@ -44,23 +38,12 @@ public class                                            GlobalExceptionHandler {
                 .body(ApiResponse.error(ex.getMessage()));
     }
 
-<<<<<<< HEAD
-    @ExceptionHandler(InvalidCredentialsException.class)
-    public ResponseEntity<ApiResponse<Void>> handleInvalidCredentials(final InvalidCredentialsException ex) {
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(ApiResponse.error(ex.getMessage()));
-    }
-
-=======
->>>>>>> 2e744a0ec2370b770aff69565021da8d47088517
     @ExceptionHandler(DuplicateResourceException.class)
     public ResponseEntity<ApiResponse<Void>> handleDuplicateResource(final DuplicateResourceException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ApiResponse.error(ex.getMessage()));
     }
 
-<<<<<<< HEAD
-=======
     @ExceptionHandler(ResourceInUseException.class)
     public ResponseEntity<ApiResponse<Void>> handleResourceInUse(final ResourceInUseException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
@@ -80,7 +63,6 @@ public class                                            GlobalExceptionHandler {
                 .body(ApiResponse.error("Registration failed due to an internal provisioning error"));
     }
 
->>>>>>> 2e744a0ec2370b770aff69565021da8d47088517
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiResponse<Void>> handleDataIntegrityViolation(final DataIntegrityViolationException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
@@ -112,13 +94,6 @@ public class                                            GlobalExceptionHandler {
                 .body(ApiResponse.error(message));
     }
 
-<<<<<<< HEAD
-    /**
-     * ATS-6: Handles invalid VAT rate and other business-rule violations
-     * (e.g. category has VAT rate other than 5% or 10%).
-     */
-=======
->>>>>>> 2e744a0ec2370b770aff69565021da8d47088517
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiResponse<Void>> handleIllegalArgument(final IllegalArgumentException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
