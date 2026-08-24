@@ -21,6 +21,12 @@ public interface ProductService {
      */
     ProductDetailResponse findDetailById(Long productId);
 
+    /**
+     * Returns all non-DELETED products (ACTIVE + INACTIVE) for admin management (ATS-6).
+     * No Redis caching — admin always reads fresh data.
+     */
+    Page<ProductResponse> findAllForAdmin(int page, int size, Long categoryId, String search);
+
     /** Creates a new product together with its linked inventory row (ATS-6). */
     ProductDetailResponse create(ProductRequest request);
 

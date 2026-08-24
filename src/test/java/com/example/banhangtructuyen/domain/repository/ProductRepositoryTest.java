@@ -157,4 +157,63 @@ class ProductRepositoryTest {
 
         assertThat(exists).isTrue();
     }
+
+    // ── ATS-6 additional repository tests ──────────────────────────────────
+
+    @Test
+    @DisplayName("findByIdWithInventory — returns product with inventory (used by admin update)")
+    void findByIdWithInventory_returnsProductWithInventory() {
+        final Category category = persistCategory("MEAT", new BigDecimal("10.00"));
+        final Product product = persistProduct(category, "thit-bo-500g",
+                new BigDecimal("150000"), Product.ProductStatus.ACTIVE);
+        persistInventory(product, 30, 5);
+
+        final Optional<Product> found = productRepository.findByIdWithInventory(product.getProductId());
+
+        assertThat(found).isPresent();
+        assertThat(found.get().getInventory()).isNotNull();
+        assertThat(found.get().getInventory().getQuantity()).isEqualTo(30);
+        assertThat(found.get().getInventory().getReservedQuantity()).isEqualTo(5);
+    }
+
+    @Test
+    @DisplayName("findAllProducts — returns ACTIVE and INACTIVE products but excludes DELETED")
+    void findAllProducts_excludesDeletedProducts() {
+        final Category category = persistCategory("DRINKS-ADMIN", new BigDecimal("10.00"));
+        final Product active   = persistProduct(category, "nuoc-suoi-a",
+                new BigDecimal("5000"),  Product.ProductStatus.ACTIVE);
+        final Product inactive = persistProduct(category, "nuoc-suoi-b",
+                new BigDecimal("6000"),  Product.ProductStatus.INACTIVE);
+        final Product deleted  = persistProduct(category, "nuoc-suoi-c",
+                new BigDecimal("7000"),  Product.ProductStatus.DELETED);
+        persistInventory(active,   10, 0);
+        persistInventory(inactive, 0,  0);
+        persistInventory(deleted,  5,  0);
+
+        final org.springframework.data.domain.Page<Product> result =
+                productRepository.findAllProducts(null, null,
+                        org.springframework.data.domain.PageRequest.of(0, 20));
+
+        final java.util.List<Long> ids = result.getContent().stream()
+                .map(Product::getProductId).toList();
+        assertThat(ids).contains(active.getProductId(), inactive.getProductId());
+        assertThat(ids).doesNotContain(deleted.getProductId());
+    }
+
+    @Test
+    @DisplayName("soft-delete — status DELETED makes product invisible to public findActiveById")
+    void softDelete_productInvisibleToPublicQuery_afterStatusDeleted() {
+        final Category category = persistCategory("HOUSEHOLD-SD", new BigDecimal("10.00"));
+        final Product product = persistProduct(category, "chen-su-sd",
+                new BigDecimal("20000"), Product.ProductStatus.ACTIVE);
+        persistInventory(product, 20, 0);
+
+        // Simulate soft delete
+        product.setStatus(Product.ProductStatus.DELETED);
+        entityManager.persistAndFlush(product);
+        entityManager.clear();
+
+        assertThat(productRepository.findActiveById(product.getProductId())).isEmpty();
+        assertThat(productRepository.findByIdWithInventory(product.getProductId())).isPresent();
+    }
 }

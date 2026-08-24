@@ -475,4 +475,142 @@ class ProductServiceTest {
             assertThat(result.inventoryCount()).isZero();
         }
     }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // ATS-6 VAT validation — create and update
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Nested
+    @DisplayName("ATS-6 — VAT rate validation (5% and 10% only)")
+    class VatValidation {
+
+        private Category categoryWithVat(final BigDecimal vatRate) {
+            return Category.builder()
+                    .categoryId(1L)
+                    .categoryCode("TEST-VAT")
+                    .categoryName("VAT Test Category")
+                    .vatRate(vatRate)
+                    .status(Category.CategoryStatus.ACTIVE)
+                    .build();
+        }
+
+        @Test
+        @DisplayName("Create — VAT 5% accepted (category with vatRate=5)")
+        void create_vat5Percent_succeeds() {
+            final Category cat5 = categoryWithVat(new BigDecimal("5.00"));
+            when(categoryRepository.findById(1L)).thenReturn(Optional.of(cat5));
+            when(productRepository.existsByProductSlug("TP001")).thenReturn(false);
+            when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(inventoryRepository.save(any(Inventory.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            final ProductDetailResponse result = productService.create(validRequest());
+
+            assertThat(result.vatRate()).isEqualByComparingTo("5.00");
+        }
+
+        @Test
+        @DisplayName("Create — VAT 10% accepted (category with vatRate=10)")
+        void create_vat10Percent_succeeds() {
+            final Category cat10 = categoryWithVat(new BigDecimal("10.00"));
+            when(categoryRepository.findById(1L)).thenReturn(Optional.of(cat10));
+            when(productRepository.existsByProductSlug("TP001")).thenReturn(false);
+            when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(inventoryRepository.save(any(Inventory.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            final ProductDetailResponse result = productService.create(validRequest());
+
+            assertThat(result.vatRate()).isEqualByComparingTo("10.00");
+        }
+
+        @Test
+        @DisplayName("Create — VAT 7% rejected (only 5 and 10 are valid)")
+        void create_vatInvalid_throws400() {
+            final Category catBad = categoryWithVat(new BigDecimal("7.00"));
+            when(categoryRepository.findById(1L)).thenReturn(Optional.of(catBad));
+
+            assertThatThrownBy(() -> productService.create(validRequest()))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("Only 5% and 10% are allowed");
+
+            verify(productRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("Create — VAT 0% rejected")
+        void create_vat0Percent_throws400() {
+            final Category catZero = categoryWithVat(new BigDecimal("0.00"));
+            when(categoryRepository.findById(1L)).thenReturn(Optional.of(catZero));
+
+            assertThatThrownBy(() -> productService.create(validRequest()))
+                    .isInstanceOf(IllegalArgumentException.class);
+
+            verify(productRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("Update — invalid VAT rejected")
+        void update_vatInvalid_throws400() {
+            final Category catBad = categoryWithVat(new BigDecimal("3.00"));
+            when(categoryRepository.findById(1L)).thenReturn(Optional.of(catBad));
+
+            assertThatThrownBy(() -> productService.update(1L, validRequest()))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("Only 5% and 10% are allowed");
+
+            verify(productRepository, never()).save(any());
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // ATS-6 — findAllForAdmin
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Nested
+    @DisplayName("findAllForAdmin — Admin product management list")
+    class FindAllForAdmin {
+
+        @Test
+        @DisplayName("Returns page from DB without Redis caching")
+        void findAllForAdmin_returnsPage_noCache() {
+            final Page<Product> dbPage = new PageImpl<>(List.of(activeProduct),
+                    PageRequest.of(0, 20), 1L);
+            when(productRepository.findAllProducts(isNull(), isNull(), any()))
+                    .thenReturn(dbPage);
+
+            final Page<ProductResponse> result = productService.findAllForAdmin(0, 20, null, null);
+
+            assertThat(result).isNotNull();
+            assertThat(result.getContent()).hasSize(1);
+            assertThat(result.getContent().get(0).id()).isEqualTo(1L);
+
+            // Redis must NOT be touched for admin list
+            verifyNoInteractions(redisTemplate);
+        }
+
+        @Test
+        @DisplayName("Returns empty page when no products exist")
+        void findAllForAdmin_emptyPage_returnsEmpty() {
+            when(productRepository.findAllProducts(isNull(), isNull(), any()))
+                    .thenReturn(Page.empty(PageRequest.of(0, 20)));
+
+            final Page<ProductResponse> result = productService.findAllForAdmin(0, 20, null, null);
+
+            assertThat(result.getContent()).isEmpty();
+            assertThat(result.getTotalElements()).isZero();
+        }
+
+        @Test
+        @DisplayName("Filters by category ID correctly")
+        void findAllForAdmin_filterByCategoryId() {
+            final Page<Product> dbPage = new PageImpl<>(List.of(activeProduct),
+                    PageRequest.of(0, 20), 1L);
+            when(productRepository.findAllProducts(eq(1L), isNull(), any()))
+                    .thenReturn(dbPage);
+
+            final Page<ProductResponse> result = productService.findAllForAdmin(0, 20, 1L, null);
+
+            assertThat(result.getContent()).hasSize(1);
+            assertThat(result.getContent().get(0).categoryId()).isEqualTo(1L);
+        }
+    }
 }
