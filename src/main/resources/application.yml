@@ -14,6 +14,16 @@ app:
     ttl:
       product-list: 300
       product-detail: 600
+  shipping:
+    fees:
+      LOCAL:
+        STANDARD: ${SHIPPING_FEE_LOCAL_STANDARD:10000}
+        EXPRESS: ${SHIPPING_FEE_LOCAL_EXPRESS:25000}
+      NEARBY:
+        STANDARD: ${SHIPPING_FEE_NEARBY_STANDARD:20000}
+        EXPRESS: ${SHIPPING_FEE_NEARBY_EXPRESS:40000}
+      OTHER:
+        STANDARD: ${SHIPPING_FEE_OTHER_STANDARD:30000}
   security:
     jwt:
       jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://localhost:8081/realms/shoponline/protocol/openid-connect/certs}
