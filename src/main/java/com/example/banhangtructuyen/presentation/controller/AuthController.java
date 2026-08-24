@@ -30,15 +30,20 @@ public class AuthController {
 
     @Operation(
         summary = "Register a new customer account",
-        description = "Creates a new customer account with ROLE=USER and STATUS=ACTIVE. "
-                    + "Password is hashed with BCrypt before storage and never returned in the response."
+        description = "Creates a Keycloak identity, an ACTIVE Oracle customer with ROLE=USER, "
+                    + "and the customer's lifetime cart. The password is managed only by Keycloak "
+                    + "and is never persisted in Oracle or returned in the response."
     )
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Account created successfully",
             content = @Content(schema = @Schema(implementation = ApiResponse.class))),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid email, password, full name, or phone",
             content = @Content(schema = @Schema(implementation = ApiResponse.class))),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Email already registered",
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Email already registered or database conflict",
+            content = @Content(schema = @Schema(implementation = ApiResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "Keycloak provisioning unavailable",
+            content = @Content(schema = @Schema(implementation = ApiResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Internal registration provisioning failure",
             content = @Content(schema = @Schema(implementation = ApiResponse.class)))
     })
     @PostMapping("/register")

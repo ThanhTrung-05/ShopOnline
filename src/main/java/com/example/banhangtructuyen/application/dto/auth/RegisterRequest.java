@@ -14,7 +14,8 @@ public record RegisterRequest(
         @Size(max = 200, message = "Email must not exceed 200 characters")
         String email,
 
-        @Schema(description = "Password — 8 to 64 characters", example = "SecurePass123")
+        @Schema(description = "Password managed by Keycloak; never persisted in Oracle — 8 to 64 characters",
+                example = "SecurePass123")
         @NotBlank(message = "Password is required")
         @Size(min = 8, max = 64, message = "Password must be between 8 and 64 characters")
         String password,

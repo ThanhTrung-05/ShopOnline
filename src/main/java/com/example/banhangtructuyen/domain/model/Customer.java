@@ -12,7 +12,7 @@ import java.time.Instant;
 
 /**
  * Customer account entity mapped to CUSTOMERS table.
- * PASSWORD_HASH stores a BCrypt hash (60 chars) — never plaintext.
+ * PASSWORD_HASH is nullable legacy data. New customer passwords are owned only by Keycloak.
  */
 @Entity
 @Table(name = "CUSTOMERS")
@@ -34,8 +34,11 @@ public class Customer {
     @Column(name = "PHONE", length = 20)
     private String phone;
 
-    @Column(name = "PASSWORD_HASH", nullable = false, length = 60)
+    @Column(name = "PASSWORD_HASH", length = 60)
     private String passwordHash;
+
+    @Column(name = "KEYCLOAK_USER_ID", length = 36, unique = true)
+    private String keycloakUserId;
 
     @Column(name = "STATUS", nullable = false, length = 20)
     @Enumerated(EnumType.STRING)

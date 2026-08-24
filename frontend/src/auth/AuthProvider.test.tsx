@@ -1,0 +1,118 @@
+import { render, screen, waitFor } from '@testing-library/react';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { AuthProvider } from './AuthProvider';
+import { useAuth } from './useAuth';
+import keycloak from './keycloak';
+import { notifyForcedLogout } from './authEvents';
+
+vi.mock('./keycloak', () => ({
+  default: {
+    init: vi.fn(),
+    login: vi.fn(),
+    logout: vi.fn(),
+    updateToken: vi.fn(),
+    authenticated: false,
+    token: undefined,
+    tokenParsed: undefined,
+  },
+}));
+
+function Probe() {
+  const { isAuthenticated, isInitializing, username, logout } = useAuth();
+  return (
+    <div>
+      <span data-testid="initializing">{String(isInitializing)}</span>
+      <span data-testid="authenticated">{String(isAuthenticated)}</span>
+      <span data-testid="username">{username ?? ''}</span>
+      <button data-testid="logout" onClick={logout}>
+        logout
+      </button>
+    </div>
+  );
+}
+
+describe('AuthProvider', () => {
+  beforeEach(() => {
+    vi.mocked(keycloak.init).mockReset();
+  });
+
+  it('starts as not authenticated and not stuck initializing when guest', async () => {
+    vi.mocked(keycloak.init).mockResolvedValue(false);
+
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId('initializing').textContent).toBe('false'));
+    expect(screen.getByTestId('authenticated').textContent).toBe('false');
+  });
+
+  it('does not call keycloak.login() during check-sso init (no forced redirect for guests)', async () => {
+    vi.mocked(keycloak.init).mockResolvedValue(false);
+
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId('initializing').textContent).toBe('false'));
+    expect(keycloak.login).not.toHaveBeenCalled();
+  });
+
+  it('exposes authenticated state and username after a successful check-sso', async () => {
+    vi.mocked(keycloak.init).mockResolvedValue(true);
+    Object.defineProperty(keycloak, 'tokenParsed', {
+      value: { preferred_username: 'test-customer' },
+      configurable: true,
+    });
+
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId('authenticated').textContent).toBe('true'));
+    expect(screen.getByTestId('username').textContent).toBe('test-customer');
+  });
+
+  it('logs out with a trailing-slash redirect URI matching the registered http://localhost:3000/* pattern', async () => {
+    vi.mocked(keycloak.init).mockResolvedValue(false);
+
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId('initializing').textContent).toBe('false'));
+
+    screen.getByTestId('logout').click();
+
+    expect(keycloak.logout).toHaveBeenCalledWith({ redirectUri: `${window.location.origin}/` });
+  });
+
+  it('clears authenticated state when a forced logout is notified (failed refresh)', async () => {
+    vi.mocked(keycloak.init).mockResolvedValue(true);
+    Object.defineProperty(keycloak, 'tokenParsed', {
+      value: { preferred_username: 'test-customer' },
+      configurable: true,
+    });
+
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId('authenticated').textContent).toBe('true'));
+
+    notifyForcedLogout();
+
+    await waitFor(() => expect(screen.getByTestId('authenticated').textContent).toBe('false'));
+    expect(screen.getByTestId('username').textContent).toBe('');
+  });
+});

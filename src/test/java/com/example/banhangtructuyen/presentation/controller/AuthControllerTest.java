@@ -4,6 +4,8 @@ import com.example.banhangtructuyen.application.dto.auth.RegisterRequest;
 import com.example.banhangtructuyen.application.dto.auth.RegisterResponse;
 import com.example.banhangtructuyen.application.service.AuthService;
 import com.example.banhangtructuyen.domain.exception.EmailAlreadyExistsException;
+import com.example.banhangtructuyen.domain.exception.KeycloakProvisioningException;
+import com.example.banhangtructuyen.domain.exception.RegistrationProvisioningException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -12,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -177,7 +180,63 @@ class AuthControllerTest {
                             .contentType("application/json")
                             .content(toJson(request)))
                     .andExpect(status().isConflict())
-                    .andExpect(jsonPath("$.success").value(false));
+                    .andExpect(jsonPath("$.success").value(false))
+                    .andExpect(jsonPath("$.message").value("Email already registered: customer@example.com"));
+        }
+    }
+
+    @Nested
+    @DisplayName("POST /api/v1/auth/register — provisioning failures")
+    class RegisterProvisioningFailures {
+
+        @Test
+        @DisplayName("503 — Keycloak provisioning failure has a retryable service error")
+        void register_shouldReturn503_whenKeycloakProvisioningFails() throws Exception {
+            when(authService.register(any(RegisterRequest.class)))
+                    .thenThrow(new KeycloakProvisioningException("Keycloak connection failed"));
+
+            mockMvc.perform(post("/api/v1/auth/register")
+                            .contentType("application/json")
+                            .content(toJson(validRequest())))
+                    .andExpect(status().isServiceUnavailable())
+                    .andExpect(jsonPath("$.success").value(false))
+                    .andExpect(jsonPath("$.message")
+                            .value("Unable to complete registration. Please try again later."));
+        }
+
+        @Test
+        @DisplayName("409 — database conflict is not mislabeled as duplicate email")
+        void register_shouldReturnGeneric409_whenDatabaseConflictOccurs() throws Exception {
+            when(authService.register(any(RegisterRequest.class)))
+                    .thenThrow(new DataIntegrityViolationException("cart unique constraint"));
+
+            mockMvc.perform(post("/api/v1/auth/register")
+                            .contentType("application/json")
+                            .content(toJson(validRequest())))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.success").value(false))
+                    .andExpect(jsonPath("$.message").value("Request conflicts with existing data"));
+        }
+
+        @Test
+        @DisplayName("500 — unexpected registration provisioning failure uses the API envelope")
+        void register_shouldReturn500_whenInternalProvisioningFails() throws Exception {
+            when(authService.register(any(RegisterRequest.class)))
+                    .thenThrow(new RegistrationProvisioningException(
+                            "internal registration failure", new IllegalStateException("Oracle unavailable")));
+
+            mockMvc.perform(post("/api/v1/auth/register")
+                            .contentType("application/json")
+                            .content(toJson(validRequest())))
+                    .andExpect(status().isInternalServerError())
+                    .andExpect(jsonPath("$.success").value(false))
+                    .andExpect(jsonPath("$.message")
+                            .value("Registration failed due to an internal provisioning error"));
+        }
+
+        private RegisterRequest validRequest() {
+            return new RegisterRequest(
+                    "customer@example.com", "SecurePass123", "Nguyễn Văn A", null);
         }
     }
 }

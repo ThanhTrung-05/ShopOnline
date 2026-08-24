@@ -11,3 +11,20 @@ spring:
     redis:
       host: localhost
       port: 6379
+
+app:
+  security:
+    jwt:
+      jwk-set-uri: http://localhost:8081/realms/shoponline/protocol/openid-connect/certs
+      issuer: http://localhost:8081/realms/shoponline
+      audience: shoponline-backend
+    cors:
+      allowed-origins: http://localhost:5173,http://configured.example.com
+  keycloak:
+    admin:
+      base-url: http://localhost:8081
+      realm: shoponline
+      client-id: shoponline-user-admin
+      client-secret: test-secret
+      backend-client-id: shoponline-backend
+      customer-role: CUSTOMER
