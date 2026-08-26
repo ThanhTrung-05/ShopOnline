@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { cartApi, emptyCart, type CartItem } from '../api/cartApi';
+import { getApiErrorMessage } from '../utils/apiError';
 
 interface CartState {
   items: CartItem[];
@@ -40,12 +41,12 @@ export const useCartStore = create<CartState>((set, get) => ({
         isLoading: false,
         error: null,
       });
-    } catch {
+    } catch (requestError) {
       set({
         items: [],
         subtotal: 0,
         isLoading: false,
-        error: 'Unable to load cart.',
+        error: getApiErrorMessage(requestError, 'Không thể tải giỏ hàng.'),
       });
     }
   },

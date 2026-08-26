@@ -3,7 +3,6 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ProductCard from './ProductCard';
 import ProductDetailPage from '../pages/ProductDetailPage';
-import { useAuthStore } from '../store/authStore';
 import toast from 'react-hot-toast';
 import {
   INSUFFICIENT_STOCK_BACKEND_MESSAGE,
@@ -31,6 +30,12 @@ vi.mock('../api/productApi', () => ({
   productApi: {
     detail: vi.fn(),
   },
+}));
+
+let authState = { isAuthenticated: true, roles: ['CUSTOMER'] as string[] };
+
+vi.mock('../auth/useAuth', () => ({
+  useAuth: () => authState,
 }));
 
 import { cartApi } from '../api/cartApi';
@@ -111,7 +116,7 @@ describe('product cart quantity display', () => {
     vi.mocked(toast.error).mockClear();
     vi.mocked(toast.success).mockClear();
     localStorage.clear();
-    useAuthStore.getState().login('customer-a');
+    authState = { isAuthenticated: true, roles: ['CUSTOMER'] };
     useCartStore.getState().clearLocal();
   });
 
@@ -121,7 +126,7 @@ describe('product cart quantity display', () => {
     await useCartStore.getState().loadCart();
     renderCard();
 
-    expect(screen.getByLabelText('cart quantity for Rice')).toHaveTextContent('Trong giỏ: 5');
+    expect(screen.getByLabelText('Số lượng trong giỏ của Rice')).toHaveTextContent('Trong giỏ: 5');
   });
 
   it('refresh/load restores quantity into product detail', async () => {
@@ -130,7 +135,7 @@ describe('product cart quantity display', () => {
     await useCartStore.getState().loadCart();
     await renderDetail();
 
-    expect(screen.getByLabelText('cart quantity for Rice')).toHaveTextContent('5');
+    expect(screen.getByLabelText('Số lượng trong giỏ của Rice')).toHaveTextContent('5');
   });
 
   it('add, update, and remove keep product detail synchronized with cartStore', async () => {
@@ -145,16 +150,16 @@ describe('product cart quantity display', () => {
 
     await useCartStore.getState().addItem(1, 2);
     await renderDetail();
-    expect(screen.getByLabelText('cart quantity for Rice')).toHaveTextContent('2');
+    expect(screen.getByLabelText('Số lượng trong giỏ của Rice')).toHaveTextContent('2');
 
     fireEvent.click(screen.getByRole('button', { name: '+' }));
-    await waitFor(() => expect(screen.getByLabelText('cart quantity for Rice')).toHaveTextContent('3'));
+    await waitFor(() => expect(screen.getByLabelText('Số lượng trong giỏ của Rice')).toHaveTextContent('3'));
 
     fireEvent.click(screen.getByRole('button', { name: '−' }));
-    await waitFor(() => expect(screen.getByLabelText('cart quantity for Rice')).toHaveTextContent('2'));
+    await waitFor(() => expect(screen.getByLabelText('Số lượng trong giỏ của Rice')).toHaveTextContent('2'));
 
     await useCartStore.getState().removeItem(11);
-    await waitFor(() => expect(screen.getByLabelText('cart quantity for Rice')).toHaveTextContent('1'));
+    await waitFor(() => expect(screen.getByLabelText('Số lượng trong giỏ của Rice')).toHaveTextContent('1'));
   });
 
   it('logout clears displayed product quantity without deleting backend cart', async () => {
@@ -163,18 +168,18 @@ describe('product cart quantity display', () => {
 
     useCartStore.getState().clearLocal();
 
-    await waitFor(() => expect(screen.getByLabelText('cart quantity for Rice')).toHaveTextContent('1'));
+    await waitFor(() => expect(screen.getByLabelText('Số lượng trong giỏ của Rice')).toHaveTextContent('1'));
     expect(cartApi.removeItem).not.toHaveBeenCalled();
   });
 
   it('login reload restores displayed quantity', async () => {
     await renderDetail();
-    expect(screen.getByLabelText('cart quantity for Rice')).toHaveTextContent('1');
+    expect(screen.getByLabelText('Số lượng trong giỏ của Rice')).toHaveTextContent('1');
 
     vi.mocked(cartApi.get).mockResolvedValue({ data: { data: cart(5) } } as any);
     await useCartStore.getState().loadCart();
 
-    await waitFor(() => expect(screen.getByLabelText('cart quantity for Rice')).toHaveTextContent('5'));
+    await waitFor(() => expect(screen.getByLabelText('Số lượng trong giỏ của Rice')).toHaveTextContent('5'));
   });
 
   it('customer switch clears previous quantity before loading the next cart', async () => {
@@ -184,16 +189,16 @@ describe('product cart quantity display', () => {
     };
     useCartStore.setState({ items: cart(5).items, subtotal: cart(5).subtotal });
     renderCard();
-    expect(screen.getByLabelText('cart quantity for Rice')).toHaveTextContent('5');
+    expect(screen.getByLabelText('Số lượng trong giỏ của Rice')).toHaveTextContent('5');
 
     useCartStore.getState().clearLocal();
-    await waitFor(() => expect(screen.queryByLabelText('cart quantity for Rice')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByLabelText('Số lượng trong giỏ của Rice')).not.toBeInTheDocument());
 
     vi.mocked(cartApi.get).mockResolvedValue({ data: { data: customerBCart } } as any);
     await useCartStore.getState().loadCart();
 
-    expect(screen.getByLabelText('cart quantity for Rice')).toHaveTextContent('2');
-    expect(screen.getByLabelText('cart quantity for Rice')).not.toHaveTextContent('5');
+    expect(screen.getByLabelText('Số lượng trong giỏ của Rice')).toHaveTextContent('2');
+    expect(screen.getByLabelText('Số lượng trong giỏ của Rice')).not.toHaveTextContent('5');
   });
 
   it('keeps product card stock unchanged after add while cart quantity changes', async () => {
@@ -205,8 +210,16 @@ describe('product cart quantity display', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '+ Thêm vào giỏ' }));
 
-    await waitFor(() => expect(screen.getByLabelText('cart quantity for Rice')).toHaveTextContent('1'));
+    await waitFor(() => expect(screen.getByLabelText('Số lượng trong giỏ của Rice')).toHaveTextContent('1'));
     expect(screen.getByText('Còn 20')).toBeInTheDocument();
+  });
+
+  it('does not show customer cart actions to ADMIN', () => {
+    authState = { isAuthenticated: true, roles: ['ADMIN'] };
+
+    renderCard();
+
+    expect(screen.queryByRole('button', { name: '+ Thêm vào giỏ' })).not.toBeInTheDocument();
   });
 
   it('keeps product detail stock unchanged after quantity update while cart quantity changes', async () => {
@@ -219,7 +232,7 @@ describe('product cart quantity display', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '+' }));
 
-    await waitFor(() => expect(screen.getByLabelText('cart quantity for Rice')).toHaveTextContent('3'));
+    await waitFor(() => expect(screen.getByLabelText('Số lượng trong giỏ của Rice')).toHaveTextContent('3'));
     expect(screen.getByText(/Còn 20 sản phẩm/)).toBeInTheDocument();
   });
 
@@ -234,7 +247,7 @@ describe('product cart quantity display', () => {
     fireEvent.click(screen.getByRole('button', { name: '−' }));
 
     await waitFor(() => expect(useCartStore.getState().items).toEqual([]));
-    expect(screen.getByLabelText('cart quantity for Rice')).toHaveTextContent('1');
+    expect(screen.getByLabelText('Số lượng trong giỏ của Rice')).toHaveTextContent('1');
     expect(screen.getByText(/Còn 20 sản phẩm/)).toBeInTheDocument();
   });
 
@@ -244,7 +257,7 @@ describe('product cart quantity display', () => {
     await useCartStore.getState().loadCart();
     await renderDetail();
 
-    expect(screen.getByLabelText('cart quantity for Rice')).toHaveTextContent('5');
+    expect(screen.getByLabelText('Số lượng trong giỏ của Rice')).toHaveTextContent('5');
     expect(screen.getByText(/Còn 20 sản phẩm/)).toBeInTheDocument();
   });
 });
@@ -259,7 +272,7 @@ describe('ATS-12 stock warning behavior', () => {
     vi.mocked(toast.error).mockClear();
     vi.mocked(toast.success).mockClear();
     localStorage.clear();
-    useAuthStore.getState().login('customer-a');
+    authState = { isAuthenticated: true, roles: ['CUSTOMER'] };
     useCartStore.getState().clearLocal();
   });
 
@@ -268,13 +281,13 @@ describe('ATS-12 stock warning behavior', () => {
     vi.mocked(cartApi.addItem).mockRejectedValue(stockError());
 
     renderCard();
-    expect(screen.getByLabelText('cart quantity for Rice')).toHaveTextContent('20');
+    expect(screen.getByLabelText('Số lượng trong giỏ của Rice')).toHaveTextContent('20');
     expect(screen.getByText('Còn 20')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '+ Thêm vào giỏ' }));
 
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith(INSUFFICIENT_STOCK_WARNING));
-    expect(screen.getByLabelText('cart quantity for Rice')).toHaveTextContent('20');
+    expect(screen.getByLabelText('Số lượng trong giỏ của Rice')).toHaveTextContent('20');
     expect(screen.getByText('Còn 20')).toBeInTheDocument();
     expect(cartApi.get).not.toHaveBeenCalled();
   });
@@ -284,13 +297,13 @@ describe('ATS-12 stock warning behavior', () => {
     vi.mocked(cartApi.updateItemQuantity).mockRejectedValue(stockError());
 
     await renderDetail();
-    expect(screen.getByLabelText('cart quantity for Rice')).toHaveTextContent('19');
+    expect(screen.getByLabelText('Số lượng trong giỏ của Rice')).toHaveTextContent('19');
     expect(screen.getByText(/Còn 20 sản phẩm/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '+' }));
 
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith(INSUFFICIENT_STOCK_WARNING));
-    expect(screen.getByLabelText('cart quantity for Rice')).toHaveTextContent('19');
+    expect(screen.getByLabelText('Số lượng trong giỏ của Rice')).toHaveTextContent('19');
     expect(screen.getByText(/Còn 20 sản phẩm/)).toBeInTheDocument();
     expect(cartApi.get).not.toHaveBeenCalled();
   });
@@ -306,11 +319,11 @@ describe('ATS-12 stock warning behavior', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '+' }));
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith(INSUFFICIENT_STOCK_WARNING));
-    expect(screen.getByLabelText('cart quantity for Rice')).toHaveTextContent('19');
+    expect(screen.getByLabelText('Số lượng trong giỏ của Rice')).toHaveTextContent('19');
 
     fireEvent.click(screen.getByRole('button', { name: '+' }));
 
-    await waitFor(() => expect(screen.getByLabelText('cart quantity for Rice')).toHaveTextContent('20'));
+    await waitFor(() => expect(screen.getByLabelText('Số lượng trong giỏ của Rice')).toHaveTextContent('20'));
     expect(toast.error).toHaveBeenCalledTimes(1);
     expect(screen.getByText(/Còn 20 sản phẩm/)).toBeInTheDocument();
   });
