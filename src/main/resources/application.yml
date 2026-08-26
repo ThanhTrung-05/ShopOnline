@@ -40,7 +40,7 @@ app:
       backend-client-id: ${KEYCLOAK_BACKEND_CLIENT_ID:shoponline-backend}
       customer-role: ${KEYCLOAK_CUSTOMER_ROLE:CUSTOMER}
       connect-timeout: ${KEYCLOAK_ADMIN_CONNECT_TIMEOUT:5s}
-      read-timeout: ${KEYCLOAK_ADMIN_READ_TIMEOUT:10s}
+      read-timeout: ${KEYCLOAK_ADMIN_READ_TIMEOUT:30s}
 
 springdoc:
   api-docs:
