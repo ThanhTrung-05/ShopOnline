@@ -4,7 +4,7 @@ services:
     image: gvenzl/oracle-xe:21-slim
     container_name: bhtt-oracle
     environment:
-      - ORACLE_PASSWORD=banhang123
+      - ORACLE_PASSWORD=${ORACLE_SYS_PASSWORD:?Set ORACLE_SYS_PASSWORD in .env}
       - ORACLE_DATABASE=XEPDB1
     ports:
       - "1522:1521"
@@ -13,7 +13,7 @@ services:
     networks:
       - bhtt-network
     healthcheck:
-      test: ["CMD", "sqlplus", "-L", "system/banhang123@localhost:1521/XEPDB1", "SELECT 1 FROM DUAL;"]
+      test: ["CMD", "healthcheck.sh"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -114,7 +114,6 @@ services:
       - KC_BOOTSTRAP_ADMIN_USERNAME=${KC_BOOTSTRAP_ADMIN_USERNAME}
       - KC_BOOTSTRAP_ADMIN_PASSWORD=${KC_BOOTSTRAP_ADMIN_PASSWORD}
       - KEYCLOAK_USER_ADMIN_CLIENT_SECRET=${KEYCLOAK_USER_ADMIN_CLIENT_SECRET}
-      - KC_HOSTNAME=http://localhost:8081
       - KC_HOSTNAME_STRICT=false
       - KC_HEALTH_ENABLED=true
     ports:
@@ -156,7 +155,7 @@ services:
       - SPRING_PROFILES_ACTIVE=prod
       - ORACLE_URL=jdbc:oracle:thin:@oracledb:1521/XEPDB1
       - ORACLE_USER=BHTT
-      - ORACLE_PASSWORD=123456
+      - ORACLE_PASSWORD=${ORACLE_PASSWORD:?Set ORACLE_PASSWORD in .env}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
