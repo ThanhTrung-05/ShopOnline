@@ -2,4 +2,4 @@
 $env:VITE_KEYCLOAK_URL = 'http://localhost:8081'
 $env:VITE_KEYCLOAK_REALM = 'shoponline'
 $env:VITE_KEYCLOAK_CLIENT_ID = 'shoponline-frontend'
-& 'C:\Users\ADMIN\AppData\Local\JetBrains\IntelliJIdea2026.1\acp-agents\.runtimes\node\24.13.0\bin\npm.cmd' run dev -- --host 127.0.0.1 --port 5173 --clearScreen false *>> 'D:\ThucTap Vissoft\ShopOnline\logs\frontend.log'
+& 'C:\Program Files\nodejs\npm.cmd' run dev -- --host 127.0.0.1 --port 5173 --clearScreen false *>> 'D:\ThucTap Vissoft\ShopOnline\logs\frontend.log'

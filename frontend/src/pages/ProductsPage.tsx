@@ -1,22 +1,17 @@
 import { useEffect, useState, useCallback } from 'react';
 import { productApi } from '../api/productApi';
+import { categoryApi, type Category } from '../api/categoryApi';
 import ProductCard from '../components/ProductCard';
 import type { Product, PageResponse } from '../types';
 import { getApiErrorMessage } from '../utils/apiError';
 
-const CATEGORIES = [
-  { code: '', label: '🌟 Tất cả' },
-  { code: 'THUC_PHAM', label: '🥩 Thực phẩm' },
-  { code: 'DIEN_MAY',  label: '📺 Điện máy' },
-  { code: 'SANH_SU',   label: '🏺 Sành sứ' },
-];
-
 export default function ProductsPage() {
+  const [categories, setCategories] = useState<Category[]>([]);
   const [data, setData]         = useState<PageResponse<Product> | null>(null);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
   const [page, setPage]         = useState(0);
-  const [category, setCategory] = useState('');
+  const [categoryId, setCategoryId] = useState<number | undefined>();
   const [search, setSearch]     = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [minPrice, setMinPrice] = useState<number | undefined>(undefined);
@@ -25,23 +20,27 @@ export default function ProductsPage() {
   const [maxPriceInput, setMaxPriceInput] = useState('');
 
   const load = useCallback(async (
-    p: number, cat: string, q: string, min?: number, max?: number,
+    p: number, catId: number | undefined, q: string, min?: number, max?: number,
   ) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await productApi.list(p, 20, cat || undefined, q || undefined, min, max);
+      const [res, catRes] = await Promise.all([
+        productApi.list(p, 20, catId, q || undefined, min, max),
+        categories.length === 0 ? categoryApi.list() : Promise.resolve(null)
+      ]);
       setData(res.data.data);
+      if (catRes) setCategories(catRes.data.data ?? []);
     } catch (requestError) {
       setData(null);
       setError(getApiErrorMessage(requestError, 'Không thể tải danh sách sản phẩm.'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [categories.length]);
 
-  useEffect(() => { load(page, category, search, minPrice, maxPrice); },
-    [page, category, search, minPrice, maxPrice]);
+  useEffect(() => { load(page, categoryId, search, minPrice, maxPrice); },
+    [page, categoryId, search, minPrice, maxPrice, load]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,11 +74,16 @@ export default function ProductsPage() {
 
         {/* Category Filter */}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 28, justifyContent: 'center' }}>
-          {CATEGORIES.map((cat) => (
-            <button key={cat.code}
-              className={`btn btn-sm ${category === cat.code ? 'btn-primary' : 'btn-ghost'}`}
-              onClick={() => { setCategory(cat.code); setPage(0); }}>
-              {cat.label}
+          <button
+            className={`btn btn-sm ${categoryId === undefined ? 'btn-primary' : 'btn-ghost'}`}
+            onClick={() => { setCategoryId(undefined); setPage(0); }}>
+            🌟 Tất cả
+          </button>
+          {categories.map((cat) => (
+            <button key={cat.categoryId}
+              className={`btn btn-sm ${categoryId === cat.categoryId ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => { setCategoryId(cat.categoryId); setPage(0); }}>
+              {cat.categoryName}
             </button>
           ))}
         </div>
@@ -88,7 +92,7 @@ export default function ProductsPage() {
         {error ? (
           <div className="state-card">
             <div className="alert alert-error" role="alert">{error}</div>
-            <button className="btn btn-ghost" type="button" onClick={() => void load(page, category, search, minPrice, maxPrice)}>
+            <button className="btn btn-ghost" type="button" onClick={() => void load(page, categoryId, search, minPrice, maxPrice)}>
               Thử lại
             </button>
           </div>

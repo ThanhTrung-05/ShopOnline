@@ -26,13 +26,13 @@ export const productApi = {
   list: (
     page = 0,
     size = 20,
-    category?: string,
+    categoryId?: number,
     search?: string,
     minPrice?: number,
     maxPrice?: number,
   ) =>
     apiClient.get<ApiResponse<PageResponse<Product>>>('/products', {
-      params: { page, size, category, search, minPrice, maxPrice },
+      params: { page, size, categoryId, search, minPrice, maxPrice },
     }),
 
   detail: (id: number) =>

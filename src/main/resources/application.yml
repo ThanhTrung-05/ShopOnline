@@ -8,6 +8,8 @@ spring:
     properties:
       hibernate:
         format_sql: true
+  flyway:
+    encoding: UTF-8
 
 app:
   redis:
