@@ -5,7 +5,7 @@ COPY gradle gradle
 COPY build.gradle settings.gradle ./
 # Copy only src code to avoid invalidating cache unnecessarily
 COPY src src
-RUN chmod +x gradlew
+RUN sed -i 's/\r$//' gradlew && chmod +x gradlew
 RUN ./gradlew bootJar -x test
 
 FROM eclipse-temurin:17-jre-alpine
