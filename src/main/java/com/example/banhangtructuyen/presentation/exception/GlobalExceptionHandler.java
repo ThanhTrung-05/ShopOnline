@@ -4,6 +4,7 @@ import com.example.banhangtructuyen.application.dto.ApiResponse;
 import com.example.banhangtructuyen.domain.exception.CustomerAccountNotActiveException;
 import com.example.banhangtructuyen.domain.exception.DuplicateResourceException;
 import com.example.banhangtructuyen.domain.exception.EmailAlreadyExistsException;
+import com.example.banhangtructuyen.domain.exception.InsufficientStockException;
 import com.example.banhangtructuyen.domain.exception.KeycloakProvisioningException;
 import com.example.banhangtructuyen.domain.exception.RegistrationProvisioningException;
 import com.example.banhangtructuyen.domain.exception.ResourceInUseException;
@@ -96,6 +97,20 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiResponse<Void>> handleIllegalArgument(final IllegalArgumentException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    /** 409 — thrown during checkout when a product has insufficient available stock (ATS-14). */
+    @ExceptionHandler(InsufficientStockException.class)
+    public ResponseEntity<ApiResponse<Void>> handleInsufficientStock(final InsufficientStockException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    /** 400 — thrown when customer tries to place order with an empty cart. */
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ApiResponse<Void>> handleIllegalState(final IllegalStateException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.error(ex.getMessage()));
     }

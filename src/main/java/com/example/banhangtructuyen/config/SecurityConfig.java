@@ -118,6 +118,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.DELETE, "/api/categories/**").hasRole("ADMIN")
                 .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/v1/cart/**").hasRole("CUSTOMER")
+                .requestMatchers("/api/v1/orders/**").hasRole("CUSTOMER")
                 .requestMatchers("/api/v1/customers/me", "/api/v1/customers/me/**").hasRole("CUSTOMER")
                 .anyRequest().authenticated())
             .oauth2ResourceServer(oauth2 -> oauth2
