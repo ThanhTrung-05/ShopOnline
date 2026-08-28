@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { productApi } from '../api/productApi';
 import ProductCard from '../components/ProductCard';
 import type { Product, PageResponse } from '../types';
+import { getApiErrorMessage } from '../utils/apiError';
 
 const CATEGORIES = [
   { code: '', label: '🌟 Tất cả' },
@@ -13,6 +14,7 @@ const CATEGORIES = [
 export default function ProductsPage() {
   const [data, setData]         = useState<PageResponse<Product> | null>(null);
   const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState<string | null>(null);
   const [page, setPage]         = useState(0);
   const [category, setCategory] = useState('');
   const [search, setSearch]     = useState('');
@@ -26,9 +28,13 @@ export default function ProductsPage() {
     p: number, cat: string, q: string, min?: number, max?: number,
   ) => {
     setLoading(true);
+    setError(null);
     try {
       const res = await productApi.list(p, 20, cat || undefined, q || undefined, min, max);
       setData(res.data.data);
+    } catch (requestError) {
+      setData(null);
+      setError(getApiErrorMessage(requestError, 'Không thể tải danh sách sản phẩm.'));
     } finally {
       setLoading(false);
     }
@@ -79,7 +85,14 @@ export default function ProductsPage() {
         </div>
 
         {/* Products Grid */}
-        {loading ? (
+        {error ? (
+          <div className="state-card">
+            <div className="alert alert-error" role="alert">{error}</div>
+            <button className="btn btn-ghost" type="button" onClick={() => void load(page, category, search, minPrice, maxPrice)}>
+              Thử lại
+            </button>
+          </div>
+        ) : loading ? (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))', gap: 20 }}>
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="card pulse" style={{ height: 340 }} />

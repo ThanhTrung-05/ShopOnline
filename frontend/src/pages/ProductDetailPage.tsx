@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { productApi, ProductDetail } from '../api/productApi';
 import { useCartStore } from '../store/cartStore';
-import { useAuthStore } from '../store/authStore';
+import { useAuth } from '../auth/useAuth';
 import toast from 'react-hot-toast';
 import { INSUFFICIENT_STOCK_WARNING, isInsufficientStockError } from '../utils/cartErrorMessages';
 
@@ -14,7 +14,9 @@ export default function ProductDetailPage() {
   const [adding, setAdding] = useState(false);
   const { addItem, updateItemQuantity, removeItem } = useCartStore();
   const cartItem = useCartStore((state) => state.items.find((item) => item.productId === Number(id)));
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, roles } = useAuth();
+  const isCustomer = roles.includes('CUSTOMER');
+  const showCartActions = !isAuthenticated || isCustomer;
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -40,6 +42,7 @@ export default function ProductDetailPage() {
 
   const handleAdd = async () => {
     if (!isAuthenticated) { toast.error('Vui lòng đăng nhập'); return; }
+    if (!isCustomer) { return; }
     setAdding(true);
     try {
       if (cartItem) {
@@ -141,21 +144,23 @@ export default function ProductDetailPage() {
             )}
 
             {/* Quantity */}
-            {!isOutOfStock && (
+            {showCartActions && !isOutOfStock && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Số lượng:</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 0, background: 'var(--bg-card)', borderRadius: 8, border: '1px solid var(--border)' }}>
                   <button className="btn btn-ghost btn-sm" onClick={handleDecrease} style={{ border: 'none' }}>−</button>
-                  <span aria-label={`cart quantity for ${product.name}`} style={{ padding: '0 16px', fontWeight: 700 }}>{displayedQty}</span>
+                  <span aria-label={`Số lượng trong giỏ của ${product.name}`} style={{ padding: '0 16px', fontWeight: 700 }}>{displayedQty}</span>
                   <button className="btn btn-ghost btn-sm" onClick={handleIncrease} style={{ border: 'none' }}>+</button>
                 </div>
               </div>
             )}
 
-            <button className={`btn btn-lg btn-full ${isOutOfStock ? 'btn-ghost' : 'btn-primary'}`}
-              onClick={handleAdd} disabled={isOutOfStock || adding}>
-              {adding ? <><span className="spinner" style={{ width: 18, height: 18 }} /> Đang thêm...</> : isOutOfStock ? 'Hết hàng' : `🛍️ Thêm vào giỏ — ${(product.priceIncludingVat * displayedQty).toLocaleString('vi-VN')}₫`}
-            </button>
+            {showCartActions && (
+              <button className={`btn btn-lg btn-full ${isOutOfStock ? 'btn-ghost' : 'btn-primary'}`}
+                onClick={handleAdd} disabled={isOutOfStock || adding}>
+                {adding ? <><span className="spinner" style={{ width: 18, height: 18 }} /> Đang thêm...</> : isOutOfStock ? 'Hết hàng' : `🛍️ Thêm vào giỏ — ${(product.priceIncludingVat * displayedQty).toLocaleString('vi-VN')}₫`}
+              </button>
+            )}
           </div>
         </div>
       </div>

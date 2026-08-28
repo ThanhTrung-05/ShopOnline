@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useCartStore } from '../store/cartStore';
-import { useAuthStore } from '../store/authStore';
+import { useAuth } from '../auth/useAuth';
 import toast from 'react-hot-toast';
 import type { Product } from '../types';
 import { INSUFFICIENT_STOCK_WARNING, isInsufficientStockError } from '../utils/cartErrorMessages';
@@ -10,11 +10,14 @@ interface Props { product: Product; }
 export default function ProductCard({ product }: Props) {
   const addItem = useCartStore((state) => state.addItem);
   const cartItem = useCartStore((state) => state.items.find((item) => item.productId === product.id));
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, roles } = useAuth();
+  const isCustomer = roles.includes('CUSTOMER');
+  const showCartActions = !isAuthenticated || isCustomer;
 
   const handleAddToCart = async (e: React.MouseEvent) => {
     e.preventDefault();
     if (!isAuthenticated) { toast.error('Vui lòng đăng nhập để thêm vào giỏ hàng'); return; }
+    if (!isCustomer) { return; }
     if (product.inventoryCount === 0) { toast.error('Sản phẩm tạm hết hàng'); return; }
     try {
       await addItem(product.id, 1);
@@ -93,17 +96,19 @@ export default function ProductCard({ product }: Props) {
             </span>
           </div>
 
-          <button
-            className={`btn ${isOutOfStock ? 'btn-ghost' : 'btn-primary'} btn-sm btn-full`}
-            onClick={handleAddToCart}
-            disabled={isOutOfStock}
-            style={{ marginTop: 8 }}
-          >
-            {isOutOfStock ? 'Hết hàng' : '+ Thêm vào giỏ'}
-          </button>
-          {cartItem && (
+          {showCartActions && (
+            <button
+              className={`btn ${isOutOfStock ? 'btn-ghost' : 'btn-primary'} btn-sm btn-full`}
+              onClick={handleAddToCart}
+              disabled={isOutOfStock}
+              style={{ marginTop: 8 }}
+            >
+              {isOutOfStock ? 'Hết hàng' : '+ Thêm vào giỏ'}
+            </button>
+          )}
+          {showCartActions && cartItem && (
             <span
-              aria-label={`cart quantity for ${product.name}`}
+              aria-label={`Số lượng trong giỏ của ${product.name}`}
               style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', fontWeight: 600, textAlign: 'center' }}
             >
               Trong giỏ: {cartItem.quantity}

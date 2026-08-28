@@ -1,169 +1,212 @@
-import { useEffect, useState, useCallback } from 'react';
-import { categoryApi, Category, CategoryRequest } from '../api/categoryApi';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import toast from 'react-hot-toast';
+import { categoryApi, type Category, type CategoryRequest } from '../api/categoryApi';
+import { getApiErrorMessage } from '../utils/apiError';
+
+const GENERIC_ERROR = 'Có lỗi xảy ra. Vui lòng thử lại.';
+const EMPTY_CATEGORY: CategoryRequest = {
+  categoryName: '',
+  categoryCode: '',
+  description: '',
+  vatRate: 10,
+  status: 'ACTIVE',
+};
+
+function statusLabel(status: string) {
+  return status === 'ACTIVE' ? 'Đang sử dụng' : 'Ngừng sử dụng';
+}
 
 export default function AdminCategoryPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // Modal State
+  const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [formData, setFormData] = useState<CategoryRequest>({
-    categoryName: '', categoryCode: '', description: '', vatRate: 10, status: 'ACTIVE'
-  });
+  const [formData, setFormData] = useState<CategoryRequest>(EMPTY_CATEGORY);
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
-      const res = await categoryApi.list();
-      setCategories(res.data.data);
-    } catch (error) {
-      console.error('Failed to load categories', error);
-      alert('Không thể tải dữ liệu danh mục.');
+      const response = await categoryApi.list();
+      setCategories(response.data.data ?? []);
+    } catch (requestError) {
+      setError(getApiErrorMessage(requestError, GENERIC_ERROR));
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
 
   const handleOpenCreate = () => {
     setEditingId(null);
+    setFormData({ ...EMPTY_CATEGORY });
+    setShowModal(true);
+  };
+
+  const handleOpenEdit = (category: Category) => {
+    setEditingId(category.categoryId);
     setFormData({
-      categoryName: '', categoryCode: '', description: '', vatRate: 10, status: 'ACTIVE'
+      categoryName: category.categoryName,
+      categoryCode: category.categoryCode,
+      description: category.description ?? '',
+      vatRate: category.vatRate,
+      status: category.status,
     });
     setShowModal(true);
   };
 
-  const handleOpenEdit = (c: Category) => {
-    setEditingId(c.categoryId);
-    setFormData({
-      categoryName: c.categoryName, categoryCode: c.categoryCode, description: c.description || '',
-      vatRate: c.vatRate, status: c.status
-    });
-    setShowModal(true);
-  };
+  const handleDelete = async (category: Category) => {
+    if (!window.confirm(`Bạn có chắc muốn xóa danh mục “${category.categoryName}”?`)) {
+      return;
+    }
 
-  const handleDelete = async (id: number, name: string) => {
-    if (!confirm(`Bạn có chắc chắn muốn xóa danh mục "${name}"?`)) return;
+    setDeletingId(category.categoryId);
     try {
-      await categoryApi.delete(id);
-      loadData();
-    } catch (error: any) {
-      alert(error.response?.data?.message || 'Xóa thất bại');
+      await categoryApi.delete(category.categoryId);
+      toast.success('Xóa thành công');
+      await loadData();
+    } catch (requestError) {
+      toast.error(getApiErrorMessage(requestError, GENERIC_ERROR));
+    } finally {
+      setDeletingId(null);
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    setSaving(true);
     try {
-      if (editingId) {
+      if (editingId !== null) {
         await categoryApi.update(editingId, formData);
+        toast.success('Cập nhật thành công');
       } else {
         await categoryApi.create(formData);
+        toast.success('Tạo mới thành công');
       }
       setShowModal(false);
-      loadData();
-    } catch (error: any) {
-      alert(error.response?.data?.message || 'Lưu thất bại. Kiểm tra mã danh mục có bị trùng không.');
+      await loadData();
+    } catch (requestError) {
+      toast.error(getApiErrorMessage(requestError, GENERIC_ERROR));
+    } finally {
+      setSaving(false);
     }
   };
 
   return (
-    <div className="page" style={{ padding: '24px' }}>
-      <div className="container" style={{ maxWidth: 1000, margin: '0 auto' }}>
-        
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-          <h2>Quản lý Danh mục (ATS-5)</h2>
-          <button className="btn btn-primary" onClick={handleOpenCreate}>+ Thêm Danh mục</button>
+    <main className="page">
+      <div className="container admin-container admin-container-narrow">
+        <div className="admin-heading">
+          <div>
+            <span className="eyebrow">Quản trị</span>
+            <h1>Quản lý danh mục</h1>
+            <p>Cập nhật danh mục và mức VAT áp dụng cho sản phẩm.</p>
+          </div>
+          <button type="button" className="btn btn-primary" onClick={handleOpenCreate}>Thêm danh mục</button>
         </div>
 
-        {/* Table */}
-        <div style={{ overflowX: 'auto', background: 'var(--surface)', borderRadius: 8, boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border)', background: 'var(--background)' }}>
-                <th style={{ padding: '12px 16px' }}>ID</th>
-                <th style={{ padding: '12px 16px' }}>Tên Danh mục</th>
-                <th style={{ padding: '12px 16px' }}>Mã (Code)</th>
-                <th style={{ padding: '12px 16px' }}>Mức VAT (%)</th>
-                <th style={{ padding: '12px 16px' }}>Trạng thái</th>
-                <th style={{ padding: '12px 16px' }}>Hành động</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? <tr><td colSpan={6} style={{ padding: 24, textAlign: 'center' }}>Đang tải...</td></tr> :
-                categories.map(c => (
-                  <tr key={c.categoryId} style={{ borderBottom: '1px solid var(--border)' }}>
-                    <td style={{ padding: '12px 16px' }}>{c.categoryId}</td>
-                    <td style={{ padding: '12px 16px', fontWeight: 500 }}>{c.categoryName}</td>
-                    <td style={{ padding: '12px 16px' }}>{c.categoryCode}</td>
-                    <td style={{ padding: '12px 16px' }}>{c.vatRate}%</td>
-                    <td style={{ padding: '12px 16px' }}>
-                      <span style={{ 
-                        padding: '4px 8px', borderRadius: 12, fontSize: '0.8rem', fontWeight: 600,
-                        background: c.status === 'ACTIVE' ? '#dcfce7' : '#fef08a',
-                        color: c.status === 'ACTIVE' ? '#166534' : '#854d0e'
-                      }}>{c.status}</span>
-                    </td>
-                    <td style={{ padding: '12px 16px' }}>
-                      <button className="btn btn-ghost btn-sm" onClick={() => handleOpenEdit(c)}>Sửa</button>
-                      <button className="btn btn-ghost btn-sm" onClick={() => handleDelete(c.categoryId, c.categoryName)} style={{ color: 'red' }}>Xóa</button>
-                    </td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Modal */}
-        {showModal && (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-            <div style={{ background: 'var(--surface)', padding: 32, borderRadius: 12, width: '100%', maxWidth: 500, maxHeight: '90vh', overflowY: 'auto' }}>
-              <h3 style={{ marginTop: 0 }}>{editingId ? 'Sửa Danh mục' : 'Thêm Danh mục'}</h3>
-              <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                
-                <div>
-                  <label>Tên danh mục *</label>
-                  <input required className="form-input" style={{ width: '100%' }} value={formData.categoryName} onChange={e => setFormData({...formData, categoryName: e.target.value})} />
-                </div>
-                
-                <div>
-                  <label>Mã danh mục (CODE) *</label>
-                  <input required className="form-input" style={{ width: '100%' }} value={formData.categoryCode} onChange={e => setFormData({...formData, categoryCode: e.target.value})} />
-                </div>
-                
-                <div>
-                  <label>Mức VAT (%) *</label>
-                  <select required className="form-input" style={{ width: '100%' }} value={formData.vatRate} onChange={e => setFormData({...formData, vatRate: Number(e.target.value)})}>
-                    <option value={5}>5%</option>
-                    <option value={10}>10%</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label>Mô tả</label>
-                  <textarea className="form-input" style={{ width: '100%', minHeight: 80 }} value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
-                </div>
-
-                <div>
-                  <label>Trạng thái</label>
-                  <select className="form-input" style={{ width: '100%' }} value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})}>
-                    <option value="ACTIVE">Hoạt động (ACTIVE)</option>
-                    <option value="INACTIVE">Tạm dừng (INACTIVE)</option>
-                  </select>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 16 }}>
-                  <button type="button" className="btn btn-ghost" onClick={() => setShowModal(false)}>Hủy</button>
-                  <button type="submit" className="btn btn-primary">Lưu</button>
-                </div>
-              </form>
-            </div>
+        {error && (
+          <div className="alert alert-error admin-alert" role="alert">
+            <span>{error}</span>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => void loadData()}>Thử lại</button>
           </div>
         )}
 
+        <section className="table-shell" aria-label="Danh sách danh mục">
+          <div className="table-scroll">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Danh mục</th>
+                  <th>Mã danh mục</th>
+                  <th>VAT</th>
+                  <th>Trạng thái</th>
+                  <th><span className="sr-only">Thao tác</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan={5}><div className="table-state"><span className="spinner spinner-dark" /> Đang tải...</div></td></tr>
+                ) : categories.length === 0 ? (
+                  <tr><td colSpan={5}><div className="table-state">Chưa có danh mục.</div></td></tr>
+                ) : categories.map((category) => (
+                  <tr key={category.categoryId}>
+                    <td><strong>{category.categoryName}</strong></td>
+                    <td>{category.categoryCode}</td>
+                    <td>{category.vatRate}%</td>
+                    <td><span className={`status-badge status-${category.status.toLowerCase()}`}>{statusLabel(category.status)}</span></td>
+                    <td>
+                      <div className="table-actions">
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => handleOpenEdit(category)}>Sửa</button>
+                        <button
+                          type="button"
+                          className="btn btn-danger btn-sm"
+                          disabled={deletingId === category.categoryId}
+                          onClick={() => void handleDelete(category)}
+                        >
+                          {deletingId === category.categoryId ? 'Đang xóa...' : 'Xóa'}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
       </div>
-    </div>
+
+      {showModal && (
+        <div className="modal-backdrop" role="presentation">
+          <section className="modal-card modal-card-small" role="dialog" aria-modal="true" aria-labelledby="category-form-title">
+            <div className="modal-header">
+              <div>
+                <span className="eyebrow">Danh mục</span>
+                <h2 id="category-form-title">{editingId !== null ? 'Sửa danh mục' : 'Thêm danh mục'}</h2>
+              </div>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowModal(false)} aria-label="Đóng">×</button>
+            </div>
+
+            <form className="form-grid" onSubmit={handleSubmit}>
+              <label className="field field-span-2">
+                <span>Tên danh mục</span>
+                <input required className="form-input" value={formData.categoryName} onChange={(event) => setFormData({ ...formData, categoryName: event.target.value })} />
+              </label>
+              <label className="field">
+                <span>Mã danh mục</span>
+                <input required className="form-input" value={formData.categoryCode} onChange={(event) => setFormData({ ...formData, categoryCode: event.target.value })} />
+              </label>
+              <label className="field">
+                <span>Mức VAT</span>
+                <select required className="form-input" value={formData.vatRate} onChange={(event) => setFormData({ ...formData, vatRate: Number(event.target.value) })}>
+                  <option value={5}>5%</option>
+                  <option value={10}>10%</option>
+                </select>
+              </label>
+              <label className="field field-span-2">
+                <span>Mô tả</span>
+                <textarea className="form-input admin-textarea" value={formData.description} onChange={(event) => setFormData({ ...formData, description: event.target.value })} />
+              </label>
+              <label className="field field-span-2">
+                <span>Trạng thái</span>
+                <select className="form-input" value={formData.status} onChange={(event) => setFormData({ ...formData, status: event.target.value })}>
+                  <option value="ACTIVE">Đang sử dụng</option>
+                  <option value="INACTIVE">Ngừng sử dụng</option>
+                </select>
+              </label>
+              <div className="modal-actions field-span-2">
+                <button type="button" className="btn btn-ghost" onClick={() => setShowModal(false)}>Hủy</button>
+                <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Đang lưu...' : 'Lưu thay đổi'}</button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
+    </main>
   );
 }
