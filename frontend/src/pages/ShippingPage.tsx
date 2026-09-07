@@ -1,26 +1,33 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { addressApi, type Address } from '../api/addressApi';
+import { orderApi } from '../api/orderApi';
 import {
   shippingApi,
   type ShippingMethod,
   type ShippingPreparation,
 } from '../api/shippingApi';
+import { useCartStore } from '../store/cartStore';
 import { getApiErrorMessage } from '../utils/apiError';
 
 const money = (value: number) =>
   new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
 
 export default function ShippingPage() {
+  const navigate = useNavigate();
+  const clearLocalCart = useCartStore((state) => state.clearLocal);
+  const placingOrderRef = useRef(false);
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
   const [shippingMethod, setShippingMethod] = useState<ShippingMethod | null>(null);
   const [preparation, setPreparation] = useState<ShippingPreparation | null>(null);
   const [loading, setLoading] = useState(true);
   const [preparing, setPreparing] = useState(false);
+  const [placingOrder, setPlacingOrder] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [prepareError, setPrepareError] = useState<string | null>(null);
+  const [orderError, setOrderError] = useState<string | null>(null);
 
   const loadAddresses = useCallback(async () => {
     setLoading(true);
@@ -51,12 +58,14 @@ export default function ShippingPage() {
     setSelectedAddressId(addressId);
     setPreparation(null);
     setPrepareError(null);
+    setOrderError(null);
   };
 
   const selectShippingMethod = (method: ShippingMethod) => {
     setShippingMethod(method);
     setPreparation(null);
     setPrepareError(null);
+    setOrderError(null);
   };
 
   const prepareShipping = async (event: FormEvent) => {
@@ -69,6 +78,7 @@ export default function ShippingPage() {
     setPreparing(true);
     setPreparation(null);
     setPrepareError(null);
+    setOrderError(null);
     try {
       const response = await shippingApi.prepare({
         addressId: selectedAddressId,
@@ -82,6 +92,32 @@ export default function ShippingPage() {
       toast.error(message);
     } finally {
       setPreparing(false);
+    }
+  };
+
+  const placeOrder = async () => {
+    if (placingOrderRef.current || preparation === null) {
+      return;
+    }
+
+    placingOrderRef.current = true;
+    setPlacingOrder(true);
+    setOrderError(null);
+    try {
+      const response = await orderApi.create({
+        addressId: preparation.addressId,
+        shippingMethod: preparation.shippingMethod,
+      });
+      clearLocalCart();
+      toast.success(`Đặt hàng thành công: ${response.data.data.orderNumber}`);
+      navigate('/orders/status');
+    } catch (requestError) {
+      const message = getApiErrorMessage(requestError, 'Không thể đặt hàng.');
+      setOrderError(message);
+      toast.error(message);
+    } finally {
+      placingOrderRef.current = false;
+      setPlacingOrder(false);
     }
   };
 
@@ -110,7 +146,7 @@ export default function ShippingPage() {
             <Link className="btn btn-primary" to="/addresses">Thêm địa chỉ</Link>
           </div>
         ) : (
-          <form className="form-stack" onSubmit={prepareShipping} aria-busy={preparing}>
+          <form className="form-stack" onSubmit={prepareShipping} aria-busy={preparing || placingOrder}>
             <section className="card card-p form-stack" aria-labelledby="shipping-address-heading">
               <div className="section-heading compact">
                 <h2 id="shipping-address-heading">Chọn địa chỉ giao hàng</h2>
@@ -127,7 +163,7 @@ export default function ShippingPage() {
                       name="shippingAddress"
                       value={address.addressId}
                       checked={selectedAddressId === address.addressId}
-                      disabled={preparing}
+                      disabled={preparing || placingOrder}
                       required
                       onChange={() => selectAddress(address.addressId)}
                     />
@@ -152,7 +188,7 @@ export default function ShippingPage() {
                     name="shippingMethod"
                     value="STANDARD"
                     checked={shippingMethod === 'STANDARD'}
-                    disabled={preparing}
+                    disabled={preparing || placingOrder}
                     required
                     onChange={() => selectShippingMethod('STANDARD')}
                   />
@@ -164,7 +200,7 @@ export default function ShippingPage() {
                     name="shippingMethod"
                     value="EXPRESS"
                     checked={shippingMethod === 'EXPRESS'}
-                    disabled={preparing}
+                    disabled={preparing || placingOrder}
                     required
                     onChange={() => selectShippingMethod('EXPRESS')}
                   />
@@ -177,7 +213,7 @@ export default function ShippingPage() {
               <button
                 className="btn btn-primary btn-full"
                 type="submit"
-                disabled={preparing || selectedAddressId === null || shippingMethod === null}
+                disabled={preparing || placingOrder || selectedAddressId === null || shippingMethod === null}
               >
                 {preparing ? 'Đang tính phí...' : 'Tính phí giao hàng'}
               </button>
@@ -195,6 +231,17 @@ export default function ShippingPage() {
                 </div>
               </section>
             )}
+
+            {orderError && <div className="alert alert-error" role="alert">{orderError}</div>}
+
+            <button
+              className="btn btn-primary btn-full"
+              type="button"
+              disabled={preparation === null || preparing || placingOrder}
+              onClick={() => void placeOrder()}
+            >
+              {placingOrder ? 'Đang đặt hàng...' : 'Đặt hàng'}
+            </button>
           </form>
         )}
       </div>

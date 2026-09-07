@@ -22,7 +22,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 /**
- * Minimal read-side mapping of the existing Oracle {@code ORDERS} table.
+ * Runtime mapping of the existing Oracle {@code ORDERS} table.
  */
 @Entity
 @Table(name = "ORDERS")
