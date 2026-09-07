@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Routes, Route, Navigate, NavLink, Link } from 'react-router-dom';
 import { useAuth } from './auth/useAuth';
 import { authApi, type SessionData } from './api/authApi';
+import { customerApi } from './api/customerApi';
 import AuthGate from './components/AuthGate';
 import RegisterPage from './pages/RegisterPage';
 import ProductsPage from './pages/ProductsPage';
@@ -10,6 +11,7 @@ import CartPage from './pages/CartPage';
 import ProfilePage from './pages/ProfilePage';
 import AddressesPage from './pages/AddressesPage';
 import ShippingPage from './pages/ShippingPage';
+import OrderStatusPage from './pages/OrderStatusPage';
 import AdminProductPage from './pages/AdminProductPage';
 import AdminCategoryPage from './pages/AdminCategoryPage';
 import { useAuthStore } from './store/authStore';
@@ -24,6 +26,7 @@ const CUSTOMER_NAV: NavItem[] = [
   { to: '/profile', label: 'Hồ sơ' },
   { to: '/addresses', label: 'Địa chỉ' },
   { to: '/shipping', label: 'Giao hàng' },
+  { to: '/orders/status', label: 'Theo dõi đơn hàng' },
 ];
 const ADMIN_NAV: NavItem[] = [
   { to: '/admin/products', label: 'Quản lý sản phẩm' },
@@ -60,6 +63,7 @@ function SessionBar() {
     logout,
   } = useAuth();
   const [session, setSession] = useState<SessionData | null>(null);
+  const [customerName, setCustomerName] = useState<string | null>(null);
   const [sessionError, setSessionError] = useState<string | null>(null);
   const isAdmin = roles.includes('ADMIN');
   const isCustomer = roles.includes('CUSTOMER');
@@ -90,6 +94,37 @@ function SessionBar() {
       .catch(() => setSessionError('Không thể tải thông tin tài khoản.'));
   }, [isAuthenticated, isCustomer, username]);
 
+  useEffect(() => {
+    let active = true;
+    setCustomerName(null);
+
+    if (!isAuthenticated || !isCustomer) {
+      return () => {
+        active = false;
+      };
+    }
+
+    customerApi
+      .getProfile()
+      .then((response) => {
+        const fullName = response.data.data?.fullName?.trim();
+        if (active && fullName) {
+          setCustomerName(fullName);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setCustomerName(null);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isAuthenticated, isCustomer, username]);
+
+  const displayName = customerName ?? session?.username ?? username ?? 'Tài khoản';
+
   return (
     <header className="site-header">
       <div className="container header-inner">
@@ -116,9 +151,9 @@ function SessionBar() {
           ) : isAuthenticated ? (
             <>
               <div className="user-chip">
-                <span className="avatar">{(session?.username ?? username ?? 'C').slice(0, 1).toUpperCase()}</span>
+                <span className="avatar">{displayName.slice(0, 1).toUpperCase()}</span>
                 <span>
-                  <strong>{session?.username ?? username ?? 'Tài khoản'}</strong>
+                  <strong>{displayName}</strong>
                   <small>{accountLabel}</small>
                 </span>
               </div>
@@ -152,6 +187,7 @@ export default function App() {
         <Route path="/profile" element={<AuthGate><ProfilePage /></AuthGate>} />
         <Route path="/addresses" element={<AuthGate><AddressesPage /></AuthGate>} />
         <Route path="/shipping" element={<AuthGate><ShippingPage /></AuthGate>} />
+        <Route path="/orders/status" element={<AuthGate><OrderStatusPage /></AuthGate>} />
         <Route path="/admin/products" element={<AuthGate requiredRole="ADMIN"><AdminProductPage /></AuthGate>} />
         <Route path="/admin/categories" element={<AuthGate requiredRole="ADMIN"><AdminCategoryPage /></AuthGate>} />
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -24,6 +24,12 @@ vi.mock('./api/axios', () => ({
   },
 }));
 
+vi.mock('./api/customerApi', () => ({
+  customerApi: {
+    getProfile: vi.fn(),
+  },
+}));
+
 vi.mock('./pages/ProductsPage', () => ({ default: () => <div>Products page</div> }));
 vi.mock('./pages/ProductDetailPage', () => ({ default: () => <div>Product detail page</div> }));
 vi.mock('./pages/RegisterPage', () => ({ default: () => <div>Register page</div> }));
@@ -31,10 +37,12 @@ vi.mock('./pages/CartPage', () => ({ default: () => <div>Cart page</div> }));
 vi.mock('./pages/ProfilePage', () => ({ default: () => <div>Profile page</div> }));
 vi.mock('./pages/AddressesPage', () => ({ default: () => <div>Addresses page</div> }));
 vi.mock('./pages/ShippingPage', () => ({ default: () => <div>Shipping page</div> }));
+vi.mock('./pages/OrderStatusPage', () => ({ default: () => <div>Order status page</div> }));
 vi.mock('./pages/AdminProductPage', () => ({ default: () => <div>Admin products page</div> }));
 vi.mock('./pages/AdminCategoryPage', () => ({ default: () => <div>Admin categories page</div> }));
 
 import apiClient from './api/axios';
+import { customerApi } from './api/customerApi';
 import App from './App';
 import { useCartStore } from './store/cartStore';
 
@@ -66,6 +74,10 @@ beforeEach(() => {
   vi.mocked(apiClient.get).mockResolvedValue({
     data: { data: { authenticated: true, subject: 'subject-1', username: 'customer-a' } },
   });
+  vi.mocked(customerApi.getProfile).mockReset();
+  vi.mocked(customerApi.getProfile).mockResolvedValue({
+    data: { data: { fullName: 'Nguyễn Văn A' } },
+  } as any);
   useCartStore.setState({
     items: [],
     subtotal: 0,
@@ -96,7 +108,7 @@ describe('App navigation and route guards', () => {
 
     expect(await screen.findByText('Products page')).toBeInTheDocument();
     const navigation = mainNavigation();
-    for (const label of ['Sản phẩm', 'Giỏ hàng', 'Hồ sơ', 'Địa chỉ', 'Giao hàng']) {
+    for (const label of ['Sản phẩm', 'Giỏ hàng', 'Hồ sơ', 'Địa chỉ', 'Giao hàng', 'Theo dõi đơn hàng']) {
       expect(within(navigation).getByRole('link', { name: label })).toBeInTheDocument();
     }
     expect(within(navigation).queryByRole('link', { name: 'Quản lý sản phẩm' })).not.toBeInTheDocument();
@@ -113,7 +125,7 @@ describe('App navigation and route guards', () => {
     const navigation = mainNavigation();
     expect(within(navigation).getByRole('link', { name: 'Quản lý sản phẩm' })).toBeInTheDocument();
     expect(within(navigation).getByRole('link', { name: 'Quản lý danh mục' })).toBeInTheDocument();
-    for (const label of ['Sản phẩm', 'Giỏ hàng', 'Hồ sơ', 'Địa chỉ', 'Giao hàng']) {
+    for (const label of ['Sản phẩm', 'Giỏ hàng', 'Hồ sơ', 'Địa chỉ', 'Giao hàng', 'Theo dõi đơn hàng']) {
       expect(within(navigation).queryByRole('link', { name: label })).not.toBeInTheDocument();
     }
     expect(screen.getByRole('button', { name: 'Đăng xuất' })).toBeInTheDocument();
@@ -141,6 +153,23 @@ describe('App navigation and route guards', () => {
     renderApp('/admin/categories');
 
     expect(await screen.findByText('Admin categories page')).toBeInTheDocument();
+  });
+
+  it('allows CUSTOMER to open order status tracking', async () => {
+    authState = { ...authState, isAuthenticated: true, username: 'customer-a', roles: ['CUSTOMER'] };
+
+    renderApp('/orders/status');
+
+    expect(await screen.findByText('Order status page')).toBeInTheDocument();
+  });
+
+  it('blocks ADMIN without CUSTOMER from order status tracking', () => {
+    authState = { ...authState, isAuthenticated: true, username: 'admin-a', roles: ['ADMIN'] };
+
+    renderApp('/orders/status');
+
+    expect(screen.getByText('Không thể truy cập trang này')).toBeInTheDocument();
+    expect(screen.queryByText('Order status page')).not.toBeInTheDocument();
   });
 
   it('blocks CUSTOMER from admin routes', () => {
@@ -201,5 +230,81 @@ describe('App cart auth lifecycle', () => {
 
     await waitFor(() => expect(useCartStore.getState().loadCart).toHaveBeenCalledTimes(2));
     expect(useCartStore.getState().clearLocal).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('App header account label', () => {
+  it('shows the CUSTOMER profile name instead of the email identifier', async () => {
+    authState = {
+      ...authState,
+      isAuthenticated: true,
+      username: 'customer@example.com',
+      roles: ['CUSTOMER'],
+    };
+    vi.mocked(apiClient.get).mockResolvedValue({
+      data: {
+        data: {
+          authenticated: true,
+          subject: 'subject-1',
+          username: 'customer@example.com',
+        },
+      },
+    });
+    vi.mocked(customerApi.getProfile).mockResolvedValue({
+      data: { data: { fullName: 'Nguyễn Văn A' } },
+    } as any);
+
+    renderApp();
+
+    expect(await screen.findByText('Nguyễn Văn A', { selector: '.user-chip strong' })).toBeInTheDocument();
+    expect(screen.queryByText('customer@example.com', { selector: '.user-chip strong' })).not.toBeInTheDocument();
+  });
+
+  it('falls back safely when the CUSTOMER profile name is unavailable', async () => {
+    authState = {
+      ...authState,
+      isAuthenticated: true,
+      username: 'customer@example.com',
+      roles: ['CUSTOMER'],
+    };
+    vi.mocked(apiClient.get).mockResolvedValue({
+      data: {
+        data: {
+          authenticated: true,
+          subject: 'subject-1',
+          username: 'customer@example.com',
+        },
+      },
+    });
+    vi.mocked(customerApi.getProfile).mockRejectedValue(new Error('Profile unavailable'));
+
+    renderApp();
+
+    await waitFor(() => expect(customerApi.getProfile).toHaveBeenCalledTimes(1));
+    expect(screen.getByText('customer@example.com', { selector: '.user-chip strong' })).toBeInTheDocument();
+  });
+
+  it('keeps the ADMIN identifier fallback without requesting a Customer profile', async () => {
+    authState = {
+      ...authState,
+      isAuthenticated: true,
+      username: 'admin@example.com',
+      roles: ['ADMIN'],
+    };
+    vi.mocked(apiClient.get).mockResolvedValue({
+      data: {
+        data: {
+          authenticated: true,
+          subject: 'admin-subject',
+          username: 'admin@example.com',
+        },
+      },
+    });
+
+    renderApp('/admin/products');
+
+    expect(await screen.findByText('admin@example.com', { selector: '.user-chip strong' })).toBeInTheDocument();
+    expect(screen.getByText('Quản trị viên')).toBeInTheDocument();
+    expect(customerApi.getProfile).not.toHaveBeenCalled();
   });
 });

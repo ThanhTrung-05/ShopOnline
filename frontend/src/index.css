@@ -940,11 +940,139 @@ h3 {
   background: rgba(52, 211, 153, 0.1);
 }
 
+.status-info {
+  color: #c7d2fe;
+  border-color: rgba(129, 140, 248, 0.3);
+  background: rgba(129, 140, 248, 0.1);
+}
+
+.status-error {
+  color: #fecaca;
+  border-color: rgba(248, 113, 113, 0.3);
+  background: rgba(248, 113, 113, 0.1);
+}
+
 .status-inactive,
 .status-deleted {
   color: #fde68a;
   border-color: rgba(251, 191, 36, 0.25);
   background: rgba(251, 191, 36, 0.09);
+}
+
+.order-status-result {
+  margin-top: 18px;
+}
+
+.order-items-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 24px 0 12px;
+}
+
+.order-items-heading h3 {
+  margin: 0;
+}
+
+.order-item-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.order-item {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.order-item > strong {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.order-item dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.order-item dl > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.order-item dt {
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+}
+
+.order-item dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-weight: 700;
+}
+
+.order-list-heading {
+  margin-bottom: 16px;
+}
+
+.order-card {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 12px;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.order-card:not(:disabled):hover,
+.order-card.selected {
+  border-color: rgba(129, 140, 248, 0.65);
+  background: rgba(129, 140, 248, 0.08);
+  transform: translateY(-1px);
+}
+
+.order-card:disabled {
+  cursor: wait;
+}
+
+.order-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.order-card-identity {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.order-card-identity small {
+  color: var(--text-secondary);
+}
+
+.order-card-identity strong {
+  overflow-wrap: anywhere;
+}
+
+.order-card-loading {
+  color: var(--accent);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.order-detail-error {
+  margin-top: 18px;
 }
 
 .table-actions {
@@ -1127,6 +1255,10 @@ h3 {
   }
 
   .shipping-result {
+    grid-template-columns: 1fr;
+  }
+
+  .order-item dl {
     grid-template-columns: 1fr;
   }
 }

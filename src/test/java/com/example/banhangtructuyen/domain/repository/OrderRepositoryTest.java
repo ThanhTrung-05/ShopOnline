@@ -13,6 +13,9 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -81,6 +84,51 @@ class OrderRepositoryTest {
 
         assertThat(orderRepository.findByOrderNumberAndCustomerId(
                 "ORD-20260827-OWNER002", otherCustomerId)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("findAllByCustomerId returns only the customer's orders newest first")
+    void findAllByCustomerId_shouldReturnOnlyOwnedOrdersNewestFirst() {
+        final Long ownerId = createCustomer("order-list-owner@example.com");
+        final Long otherCustomerId = createCustomer("order-list-other@example.com");
+        final Order olderOwnedOrder = orderRepository.saveAndFlush(sampleOrder(
+                "ORD-20260826-OWNED001", ownerId, OrderStatus.CONFIRMED));
+        final Order newerOwnedOrder = orderRepository.saveAndFlush(sampleOrder(
+                "ORD-20260828-OWNED002", ownerId, OrderStatus.SHIPPING));
+        final Order otherCustomerOrder = orderRepository.saveAndFlush(sampleOrder(
+                "ORD-20260829-OTHER001", otherCustomerId, OrderStatus.PAID));
+
+        setCreatedAt(olderOwnedOrder.getOrderId(), "2026-08-26T03:00:00Z");
+        setCreatedAt(newerOwnedOrder.getOrderId(), "2026-08-28T03:00:00Z");
+        setCreatedAt(otherCustomerOrder.getOrderId(), "2026-08-29T03:00:00Z");
+        entityManager.clear();
+
+        final List<Order> orders = orderRepository
+                .findAllByCustomerIdOrderByCreatedAtDesc(ownerId);
+
+        assertThat(orders)
+                .extracting(Order::getOrderNumber)
+                .containsExactly("ORD-20260828-OWNED002", "ORD-20260826-OWNED001");
+        assertThat(orders)
+                .extracting(Order::getCustomerId)
+                .containsOnly(ownerId);
+    }
+
+    @Test
+    @DisplayName("findAllByCustomerId returns an empty list when the customer has no orders")
+    void findAllByCustomerId_shouldReturnEmptyList() {
+        final Long customerId = createCustomer("order-list-empty@example.com");
+
+        assertThat(orderRepository.findAllByCustomerIdOrderByCreatedAtDesc(customerId)).isEmpty();
+    }
+
+    private void setCreatedAt(final Long orderId, final String createdAt) {
+        entityManager.getEntityManager()
+                .createNativeQuery("UPDATE ORDERS SET CREATED_AT = :createdAt WHERE ORDER_ID = :orderId")
+                .setParameter("createdAt", Timestamp.from(Instant.parse(createdAt)))
+                .setParameter("orderId", orderId)
+                .executeUpdate();
+        entityManager.flush();
     }
 
     private Long createCustomer(final String email) {
