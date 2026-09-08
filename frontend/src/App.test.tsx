@@ -38,6 +38,7 @@ vi.mock('./pages/ProfilePage', () => ({ default: () => <div>Profile page</div> }
 vi.mock('./pages/AddressesPage', () => ({ default: () => <div>Addresses page</div> }));
 vi.mock('./pages/ShippingPage', () => ({ default: () => <div>Shipping page</div> }));
 vi.mock('./pages/OrderStatusPage', () => ({ default: () => <div>Order status page</div> }));
+vi.mock('./pages/OperationsOrderPage', () => ({ default: () => <div>Operations order page</div> }));
 vi.mock('./pages/AdminProductPage', () => ({ default: () => <div>Admin products page</div> }));
 vi.mock('./pages/AdminCategoryPage', () => ({ default: () => <div>Admin categories page</div> }));
 
@@ -125,6 +126,7 @@ describe('App navigation and route guards', () => {
     const navigation = mainNavigation();
     expect(within(navigation).getByRole('link', { name: 'Quản lý sản phẩm' })).toBeInTheDocument();
     expect(within(navigation).getByRole('link', { name: 'Quản lý danh mục' })).toBeInTheDocument();
+    expect(within(navigation).getByRole('link', { name: 'Quản lý đơn hàng' })).toBeInTheDocument();
     for (const label of ['Sản phẩm', 'Giỏ hàng', 'Hồ sơ', 'Địa chỉ', 'Giao hàng', 'Theo dõi đơn hàng']) {
       expect(within(navigation).queryByRole('link', { name: label })).not.toBeInTheDocument();
     }
@@ -153,6 +155,53 @@ describe('App navigation and route guards', () => {
     renderApp('/admin/categories');
 
     expect(await screen.findByText('Admin categories page')).toBeInTheDocument();
+  });
+
+  it('redirects WAREHOUSE_STAFF to operations and shows only operations navigation', async () => {
+    authState = {
+      ...authState,
+      isAuthenticated: true,
+      username: 'warehouse-a',
+      roles: ['WAREHOUSE_STAFF'],
+    };
+
+    renderApp('/');
+
+    expect(await screen.findByText('Operations order page')).toBeInTheDocument();
+    const navigation = mainNavigation();
+    expect(within(navigation).getByRole('link', { name: 'Quản lý đơn hàng' })).toBeInTheDocument();
+    expect(within(navigation).queryByRole('link', { name: 'Quản lý sản phẩm' })).not.toBeInTheDocument();
+    expect(screen.getByText('Nhân viên kho')).toBeInTheDocument();
+  });
+
+  it('allows ADMIN and WAREHOUSE_STAFF to open operations orders', async () => {
+    authState = { ...authState, isAuthenticated: true, username: 'admin-a', roles: ['ADMIN'] };
+    const view = renderApp('/operations/orders');
+
+    expect(await screen.findByText('Operations order page')).toBeInTheDocument();
+
+    authState = {
+      ...authState,
+      isAuthenticated: true,
+      username: 'warehouse-a',
+      roles: ['WAREHOUSE_STAFF'],
+    };
+    view.rerender(
+      <MemoryRouter initialEntries={['/operations/orders']}>
+        <App />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Operations order page')).toBeInTheDocument();
+  });
+
+  it('blocks CUSTOMER from operations orders', () => {
+    authState = { ...authState, isAuthenticated: true, username: 'customer-a', roles: ['CUSTOMER'] };
+
+    renderApp('/operations/orders');
+
+    expect(screen.getByText('Không thể truy cập trang này')).toBeInTheDocument();
+    expect(screen.queryByText('Operations order page')).not.toBeInTheDocument();
   });
 
   it('allows CUSTOMER to open order status tracking', async () => {

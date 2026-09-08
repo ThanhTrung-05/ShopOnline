@@ -71,4 +71,38 @@ describe('AuthGate', () => {
     expect(screen.getByText('Không thể truy cập trang này')).toBeInTheDocument();
     expect(screen.queryByText('Admin content')).not.toBeInTheDocument();
   });
+
+  it('accepts either ADMIN or WAREHOUSE_STAFF for shared operations content', () => {
+    authState = { ...authState, isAuthenticated: true, roles: ['WAREHOUSE_STAFF'] };
+
+    const view = render(
+      <AuthGate requiredRole={['ADMIN', 'WAREHOUSE_STAFF']}>
+        <div>Operations content</div>
+      </AuthGate>,
+    );
+
+    expect(screen.getByText('Operations content')).toBeInTheDocument();
+
+    authState = { ...authState, roles: ['ADMIN'] };
+    view.rerender(
+      <AuthGate requiredRole={['ADMIN', 'WAREHOUSE_STAFF']}>
+        <div>Operations content</div>
+      </AuthGate>,
+    );
+
+    expect(screen.getByText('Operations content')).toBeInTheDocument();
+  });
+
+  it('blocks CUSTOMER from shared operations content', () => {
+    authState = { ...authState, isAuthenticated: true, roles: ['CUSTOMER'] };
+
+    render(
+      <AuthGate requiredRole={['ADMIN', 'WAREHOUSE_STAFF']}>
+        <div>Operations content</div>
+      </AuthGate>,
+    );
+
+    expect(screen.getByText('Không thể truy cập trang này')).toBeInTheDocument();
+    expect(screen.queryByText('Operations content')).not.toBeInTheDocument();
+  });
 });

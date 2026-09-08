@@ -12,6 +12,7 @@ import ProfilePage from './pages/ProfilePage';
 import AddressesPage from './pages/AddressesPage';
 import ShippingPage from './pages/ShippingPage';
 import OrderStatusPage from './pages/OrderStatusPage';
+import OperationsOrderPage from './pages/OperationsOrderPage';
 import AdminProductPage from './pages/AdminProductPage';
 import AdminCategoryPage from './pages/AdminCategoryPage';
 import { useAuthStore } from './store/authStore';
@@ -31,6 +32,10 @@ const CUSTOMER_NAV: NavItem[] = [
 const ADMIN_NAV: NavItem[] = [
   { to: '/admin/products', label: 'Quản lý sản phẩm' },
   { to: '/admin/categories', label: 'Quản lý danh mục' },
+  { to: '/operations/orders', label: 'Quản lý đơn hàng' },
+];
+const WAREHOUSE_NAV: NavItem[] = [
+  { to: '/operations/orders', label: 'Quản lý đơn hàng' },
 ];
 
 function RoleLandingRedirect() {
@@ -49,7 +54,12 @@ function RoleLandingRedirect() {
     );
   }
 
-  return <Navigate to={roles.includes('ADMIN') ? '/admin/products' : '/products'} replace />;
+  const destination = roles.includes('ADMIN')
+    ? '/admin/products'
+    : roles.includes('WAREHOUSE_STAFF')
+      ? '/operations/orders'
+      : '/products';
+  return <Navigate to={destination} replace />;
 }
 
 function SessionBar() {
@@ -66,9 +76,16 @@ function SessionBar() {
   const [customerName, setCustomerName] = useState<string | null>(null);
   const [sessionError, setSessionError] = useState<string | null>(null);
   const isAdmin = roles.includes('ADMIN');
+  const isWarehouse = roles.includes('WAREHOUSE_STAFF');
   const isCustomer = roles.includes('CUSTOMER');
-  const navItems = isAdmin ? ADMIN_NAV : isCustomer ? CUSTOMER_NAV : GUEST_NAV;
-  const accountLabel = isAdmin ? 'Quản trị viên' : isCustomer ? 'Khách hàng' : 'Tài khoản';
+  const navItems = isAdmin ? ADMIN_NAV : isWarehouse ? WAREHOUSE_NAV : isCustomer ? CUSTOMER_NAV : GUEST_NAV;
+  const accountLabel = isAdmin
+    ? 'Quản trị viên'
+    : isWarehouse
+      ? 'Nhân viên kho'
+      : isCustomer
+        ? 'Khách hàng'
+        : 'Tài khoản';
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -190,6 +207,14 @@ export default function App() {
         <Route path="/orders/status" element={<AuthGate><OrderStatusPage /></AuthGate>} />
         <Route path="/admin/products" element={<AuthGate requiredRole="ADMIN"><AdminProductPage /></AuthGate>} />
         <Route path="/admin/categories" element={<AuthGate requiredRole="ADMIN"><AdminCategoryPage /></AuthGate>} />
+        <Route
+          path="/operations/orders"
+          element={(
+            <AuthGate requiredRole={['ADMIN', 'WAREHOUSE_STAFF']}>
+              <OperationsOrderPage />
+            </AuthGate>
+          )}
+        />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </>

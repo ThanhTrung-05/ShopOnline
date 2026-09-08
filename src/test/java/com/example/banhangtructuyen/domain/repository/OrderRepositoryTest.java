@@ -122,6 +122,39 @@ class OrderRepositoryTest {
         assertThat(orderRepository.findAllByCustomerIdOrderByCreatedAtDesc(customerId)).isEmpty();
     }
 
+    @Test
+    @DisplayName("operations list returns orders across customers newest first")
+    void findAllByOrderByCreatedAtDesc_shouldReturnAllOrdersNewestFirst() {
+        final Long firstCustomerId = createCustomer("operations-list-one@example.com");
+        final Long secondCustomerId = createCustomer("operations-list-two@example.com");
+        final Order olderOrder = orderRepository.saveAndFlush(sampleOrder(
+                "ORD-20260906-OPERATIONS", firstCustomerId, OrderStatus.CONFIRMED));
+        final Order newerOrder = orderRepository.saveAndFlush(sampleOrder(
+                "ORD-20260907-OPERATIONS", secondCustomerId, OrderStatus.PENDING));
+        setCreatedAt(olderOrder.getOrderId(), "2026-09-06T03:00:00Z");
+        setCreatedAt(newerOrder.getOrderId(), "2026-09-07T03:00:00Z");
+        entityManager.clear();
+
+        assertThat(orderRepository.findAllByOrderByCreatedAtDesc())
+                .extracting(Order::getOrderNumber)
+                .containsExactly("ORD-20260907-OPERATIONS", "ORD-20260906-OPERATIONS");
+    }
+
+    @Test
+    @DisplayName("status updates load the order using the locking order-number query")
+    void findByOrderNumberForUpdate_shouldReturnOrder() {
+        final Long customerId = createCustomer("operations-lock@example.com");
+        orderRepository.saveAndFlush(sampleOrder(
+                "ORD-20260907-LOCK", customerId, OrderStatus.PENDING));
+        entityManager.clear();
+
+        assertThat(orderRepository.findByOrderNumberForUpdate("ORD-20260907-LOCK"))
+                .isPresent()
+                .get()
+                .extracting(Order::getStatus)
+                .isEqualTo(OrderStatus.PENDING);
+    }
+
     private void setCreatedAt(final Long orderId, final String createdAt) {
         entityManager.getEntityManager()
                 .createNativeQuery("UPDATE ORDERS SET CREATED_AT = :createdAt WHERE ORDER_ID = :orderId")

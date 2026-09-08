@@ -1,15 +1,16 @@
 import type { ReactNode } from 'react';
 import { useAuth } from '../auth/useAuth';
 
-type ProtectedRole = 'CUSTOMER' | 'ADMIN';
+type ProtectedRole = 'CUSTOMER' | 'WAREHOUSE_STAFF' | 'ADMIN';
 
 type AuthGateProps = {
   children: ReactNode;
-  requiredRole?: ProtectedRole;
+  requiredRole?: ProtectedRole | ProtectedRole[];
 };
 
 export default function AuthGate({ children, requiredRole = 'CUSTOMER' }: AuthGateProps) {
   const { isAuthenticated, isInitializing, roles, login, error } = useAuth();
+  const acceptedRoles = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
 
   if (isInitializing) {
     return (
@@ -42,7 +43,7 @@ export default function AuthGate({ children, requiredRole = 'CUSTOMER' }: AuthGa
     );
   }
 
-  if (!roles.includes(requiredRole)) {
+  if (!acceptedRoles.some((role) => roles.includes(role))) {
     return (
       <main className="page">
         <div className="container narrow-container">
