@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Routes, Route, Navigate, NavLink, Link } from 'react-router-dom';
+import { List, X } from '@phosphor-icons/react';
+import { Routes, Route, Navigate, NavLink, Link, useLocation } from 'react-router-dom';
 import { useAuth } from './auth/useAuth';
 import { authApi, type SessionData } from './api/authApi';
 import { customerApi } from './api/customerApi';
 import AuthGate from './components/AuthGate';
+import NotificationBell from './components/NotificationBell';
 import RegisterPage from './pages/RegisterPage';
 import ProductsPage from './pages/ProductsPage';
 import ProductDetailPage from './pages/ProductDetailPage';
@@ -75,6 +77,8 @@ function SessionBar() {
   const [session, setSession] = useState<SessionData | null>(null);
   const [customerName, setCustomerName] = useState<string | null>(null);
   const [sessionError, setSessionError] = useState<string | null>(null);
+  const [navigationOpen, setNavigationOpen] = useState(false);
+  const location = useLocation();
   const isAdmin = roles.includes('ADMIN');
   const isWarehouse = roles.includes('WAREHOUSE_STAFF');
   const isCustomer = roles.includes('CUSTOMER');
@@ -140,6 +144,10 @@ function SessionBar() {
     };
   }, [isAuthenticated, isCustomer, username]);
 
+  useEffect(() => {
+    setNavigationOpen(false);
+  }, [location.pathname]);
+
   const displayName = customerName ?? session?.username ?? username ?? 'Tài khoản';
 
   return (
@@ -150,12 +158,32 @@ function SessionBar() {
           <span><strong>ShopOnline</strong><small>Mua sắm trực tuyến</small></span>
         </Link>
 
-        <nav className="main-nav" aria-label="Điều hướng chính">
+        <button
+          type="button"
+          className="navigation-toggle"
+          aria-label={navigationOpen ? 'Đóng điều hướng' : 'Mở điều hướng'}
+          aria-expanded={navigationOpen}
+          aria-controls="site-navigation"
+          onClick={() => setNavigationOpen((open) => !open)}
+        >
+          {navigationOpen ? (
+            <X size={21} weight="bold" aria-hidden="true" />
+          ) : (
+            <List size={22} weight="bold" aria-hidden="true" />
+          )}
+        </button>
+
+        <nav
+          id="site-navigation"
+          className={navigationOpen ? 'main-nav is-open' : 'main-nav'}
+          aria-label="Điều hướng chính"
+        >
           {navItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}
+              onClick={() => setNavigationOpen(false)}
             >
               {item.label}
             </NavLink>
@@ -167,6 +195,7 @@ function SessionBar() {
             <span className="auth-loading"><span className="spinner spinner-dark" /> Đang tải...</span>
           ) : isAuthenticated ? (
             <>
+              {isCustomer && <NotificationBell identityKey={username ?? ''} />}
               <div className="user-chip">
                 <span className="avatar">{displayName.slice(0, 1).toUpperCase()}</span>
                 <span>
@@ -193,30 +222,33 @@ function SessionBar() {
 
 export default function App() {
   return (
-    <>
+    <div className="app-shell">
+      <a className="skip-link" href="#main-content">Chuyển đến nội dung chính</a>
       <SessionBar />
-      <Routes>
-        <Route path="/" element={<RoleLandingRedirect />} />
-        <Route path="/register" element={<RegisterPage />} />
-        <Route path="/products" element={<ProductsPage />} />
-        <Route path="/products/:id" element={<ProductDetailPage />} />
-        <Route path="/cart" element={<AuthGate><CartPage /></AuthGate>} />
-        <Route path="/profile" element={<AuthGate><ProfilePage /></AuthGate>} />
-        <Route path="/addresses" element={<AuthGate><AddressesPage /></AuthGate>} />
-        <Route path="/shipping" element={<AuthGate><ShippingPage /></AuthGate>} />
-        <Route path="/orders/status" element={<AuthGate><OrderStatusPage /></AuthGate>} />
-        <Route path="/admin/products" element={<AuthGate requiredRole="ADMIN"><AdminProductPage /></AuthGate>} />
-        <Route path="/admin/categories" element={<AuthGate requiredRole="ADMIN"><AdminCategoryPage /></AuthGate>} />
-        <Route
-          path="/operations/orders"
-          element={(
-            <AuthGate requiredRole={['ADMIN', 'WAREHOUSE_STAFF']}>
-              <OperationsOrderPage />
-            </AuthGate>
-          )}
-        />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </>
+      <div id="main-content" className="app-content" tabIndex={-1}>
+        <Routes>
+          <Route path="/" element={<RoleLandingRedirect />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/products" element={<ProductsPage />} />
+          <Route path="/products/:id" element={<ProductDetailPage />} />
+          <Route path="/cart" element={<AuthGate><CartPage /></AuthGate>} />
+          <Route path="/profile" element={<AuthGate><ProfilePage /></AuthGate>} />
+          <Route path="/addresses" element={<AuthGate><AddressesPage /></AuthGate>} />
+          <Route path="/shipping" element={<AuthGate><ShippingPage /></AuthGate>} />
+          <Route path="/orders/status" element={<AuthGate><OrderStatusPage /></AuthGate>} />
+          <Route path="/admin/products" element={<AuthGate requiredRole="ADMIN"><AdminProductPage /></AuthGate>} />
+          <Route path="/admin/categories" element={<AuthGate requiredRole="ADMIN"><AdminCategoryPage /></AuthGate>} />
+          <Route
+            path="/operations/orders"
+            element={(
+              <AuthGate requiredRole={['ADMIN', 'WAREHOUSE_STAFF']}>
+                <OperationsOrderPage />
+              </AuthGate>
+            )}
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </div>
+    </div>
   );
 }

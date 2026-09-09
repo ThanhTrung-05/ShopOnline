@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Minus, Package, Plus, ShoppingBag } from '@phosphor-icons/react';
 import { productApi, ProductDetail } from '../api/productApi';
 import { useCartStore } from '../store/cartStore';
 import { useAuth } from '../auth/useAuth';
@@ -50,7 +51,7 @@ export default function ProductDetailPage() {
       } else {
         await addItem(product!.id, displayedQty);
       }
-      toast.success(`Đã thêm ${displayedQty} sản phẩm vào giỏ! 🛍️`);
+      toast.success(`Đã thêm ${displayedQty} sản phẩm vào giỏ hàng.`);
     } catch (err) {
       showCartError(err);
     } finally { setAdding(false); }
@@ -85,85 +86,105 @@ export default function ProductDetailPage() {
   };
 
   if (loading) return (
-    <div className="page"><div className="container">
-      <div className="card pulse" style={{ height: 400 }} />
-    </div></div>
+    <main className="page product-detail-page">
+      <div className="container product-detail-container">
+        <div className="product-detail-skeleton" aria-label="Đang tải sản phẩm" aria-busy="true">
+          <div className="skeleton-media pulse" />
+          <div className="skeleton-copy">
+            <span className="skeleton-line skeleton-line-short pulse" />
+            <span className="skeleton-line skeleton-line-title pulse" />
+            <span className="skeleton-line pulse" />
+            <span className="skeleton-line pulse" />
+          </div>
+        </div>
+      </div>
+    </main>
   );
   if (!product) return null;
 
   const isOutOfStock = product.inventoryCount === 0;
 
   return (
-    <div className="page">
-      <div className="container">
-        <button className="btn btn-ghost btn-sm" onClick={() => navigate(-1)} style={{ marginBottom: 24 }}>← Quay lại</button>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 40, alignItems: 'start' }}>
-          {/* Image */}
-          <div className="card" style={{ aspectRatio: '1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '6rem', background: 'linear-gradient(135deg,rgba(99,102,241,0.08),rgba(139,92,246,0.04))' }}>
-            {product.imageUrl
-              ? <img src={product.imageUrl} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 16 }} />
-              : <span>🛒</span>
-            }
-          </div>
+    <main className="page product-detail-page">
+      <div className="container product-detail-container">
+        <button className="back-button" type="button" onClick={() => navigate(-1)}>
+          <ArrowLeft size={18} weight="bold" aria-hidden="true" />
+          Quay lại
+        </button>
 
-          {/* Info */}
-          <div className="card card-p fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            <div>
-              <p style={{ color: 'var(--accent)', fontSize: '0.875rem', fontWeight: 600, marginBottom: 8 }}>{product.categoryName}</p>
-              <h1 style={{ fontSize: '1.5rem', fontWeight: 800 }}>{product.name}</h1>
-            </div>
-            
-            {/* Pricing Details */}
-            <div style={{ padding: '16px', background: 'rgba(99, 102, 241, 0.05)', borderRadius: '12px', border: '1px solid rgba(99, 102, 241, 0.1)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', color: 'var(--text-secondary)' }}>
-                <span>Đơn giá (chưa VAT):</span>
-                <span>{product.price.toLocaleString('vi-VN')}₫</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', color: 'var(--text-secondary)' }}>
-                <span>Thuế VAT ({product.vatRate}%):</span>
-                <span>{product.vatAmount.toLocaleString('vi-VN')}₫</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px', paddingTop: '12px', borderTop: '1px dashed rgba(99, 102, 241, 0.2)' }}>
-                <span style={{ fontWeight: 600 }}>Giá đã bao gồm VAT:</span>
-                <span style={{ fontSize: '1.75rem', fontWeight: 800, background: 'linear-gradient(135deg,#6366f1,#a78bfa)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                  {product.priceIncludingVat.toLocaleString('vi-VN')}₫
-                </span>
-              </div>
-            </div>
+        <div className="product-detail-layout">
+          <section className="product-detail-media" aria-label={`Hình ảnh ${product.name}`}>
+            {product.imageUrl ? (
+              <img src={product.imageUrl} alt={product.name} />
+            ) : (
+              <span className="product-detail-placeholder" aria-hidden="true">
+                <Package size={72} weight="duotone" />
+              </span>
+            )}
+          </section>
 
-            <p style={{ color: product.inventoryCount < 10 ? 'var(--warning)' : 'var(--text-secondary)', fontSize: '0.9rem' }}>
-              {isOutOfStock ? '❌ Hết hàng' : `✅ Còn ${product.inventoryCount} sản phẩm`}
+          <article className="product-detail-panel fade-in">
+            <header className="product-detail-heading">
+              <p className="product-detail-category">{product.categoryName}</p>
+              <h1>{product.name}</h1>
+            </header>
+
+            <dl className="product-pricing">
+              <div>
+                <dt>Đơn giá (chưa VAT)</dt>
+                <dd>{product.price.toLocaleString('vi-VN')}₫</dd>
+              </div>
+              <div>
+                <dt>Thuế VAT ({product.vatRate}%)</dt>
+                <dd>{product.vatAmount.toLocaleString('vi-VN')}₫</dd>
+              </div>
+              <div className="product-price-total">
+                <dt>Giá đã bao gồm VAT</dt>
+                <dd>{product.priceIncludingVat.toLocaleString('vi-VN')}₫</dd>
+              </div>
+            </dl>
+
+            <p className={`product-availability ${isOutOfStock ? 'out' : product.inventoryCount < 10 ? 'low' : ''}`}>
+              {isOutOfStock ? 'Hết hàng' : `Còn ${product.inventoryCount} sản phẩm`}
             </p>
 
-            {/* Description */}
             {product.description && (
-              <div 
-                style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', lineHeight: 1.6, marginTop: 16 }}
-                dangerouslySetInnerHTML={{ __html: product.description }} 
-              />
+              <div className="product-description" dangerouslySetInnerHTML={{ __html: product.description }} />
             )}
 
-            {/* Quantity */}
             {showCartActions && !isOutOfStock && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Số lượng:</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 0, background: 'var(--bg-card)', borderRadius: 8, border: '1px solid var(--border)' }}>
-                  <button className="btn btn-ghost btn-sm" onClick={handleDecrease} style={{ border: 'none' }}>−</button>
-                  <span aria-label={`Số lượng trong giỏ của ${product.name}`} style={{ padding: '0 16px', fontWeight: 700 }}>{displayedQty}</span>
-                  <button className="btn btn-ghost btn-sm" onClick={handleIncrease} style={{ border: 'none' }}>+</button>
+              <div className="product-purchase-row">
+                <span className="quantity-label">Số lượng</span>
+                <div className="quantity-control product-detail-quantity">
+                  <button type="button" aria-label="−" onClick={handleDecrease}>
+                    <Minus size={16} weight="bold" aria-hidden="true" />
+                  </button>
+                  <strong aria-label={`Số lượng trong giỏ của ${product.name}`}>{displayedQty}</strong>
+                  <button type="button" aria-label="+" onClick={handleIncrease}>
+                    <Plus size={16} weight="bold" aria-hidden="true" />
+                  </button>
                 </div>
               </div>
             )}
 
             {showCartActions && (
-              <button className={`btn btn-lg btn-full ${isOutOfStock ? 'btn-ghost' : 'btn-primary'}`}
-                onClick={handleAdd} disabled={isOutOfStock || adding}>
-                {adding ? <><span className="spinner" style={{ width: 18, height: 18 }} /> Đang thêm...</> : isOutOfStock ? 'Hết hàng' : `🛍️ Thêm vào giỏ — ${(product.priceIncludingVat * displayedQty).toLocaleString('vi-VN')}₫`}
+              <button
+                className={`btn btn-lg btn-full ${isOutOfStock ? 'btn-ghost' : 'btn-primary'}`}
+                onClick={handleAdd}
+                disabled={isOutOfStock || adding}
+              >
+                {adding ? (
+                  <><span className="spinner spinner-inline" /> Đang thêm...</>
+                ) : isOutOfStock ? (
+                  'Hết hàng'
+                ) : (
+                  <><ShoppingBag size={20} weight="bold" aria-hidden="true" /> Thêm vào giỏ - {(product.priceIncludingVat * displayedQty).toLocaleString('vi-VN')}₫</>
+                )}
               </button>
             )}
-          </div>
+          </article>
         </div>
       </div>
-    </div>
+    </main>
   );
 }

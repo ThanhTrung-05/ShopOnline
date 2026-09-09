@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -28,6 +28,10 @@ vi.mock('./api/customerApi', () => ({
   customerApi: {
     getProfile: vi.fn(),
   },
+}));
+
+vi.mock('./components/NotificationBell', () => ({
+  default: () => <div aria-label="Notification bell" />,
 }));
 
 vi.mock('./pages/ProductsPage', () => ({ default: () => <div>Products page</div> }));
@@ -90,6 +94,25 @@ beforeEach(() => {
 });
 
 describe('App navigation and route guards', () => {
+  it('opens and closes the responsive navigation without changing its links', () => {
+    renderApp('/products');
+
+    const openButton = screen.getByRole('button', { name: 'Mở điều hướng' });
+    const navigation = mainNavigation();
+
+    expect(openButton).toHaveAttribute('aria-expanded', 'false');
+    expect(navigation).not.toHaveClass('is-open');
+
+    fireEvent.click(openButton);
+
+    expect(screen.getByRole('button', { name: 'Đóng điều hướng' })).toHaveAttribute('aria-expanded', 'true');
+    expect(navigation).toHaveClass('is-open');
+    expect(within(navigation).getByRole('link', { name: 'Sản phẩm' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Đóng điều hướng' }));
+    expect(screen.getByRole('button', { name: 'Mở điều hướng' })).toHaveAttribute('aria-expanded', 'false');
+  });
+
   it('redirects a guest from Home to Products and shows guest navigation', async () => {
     renderApp('/');
 
@@ -235,6 +258,21 @@ describe('App navigation and route guards', () => {
 
     expect(screen.getByRole('heading', { name: 'Đăng nhập để tiếp tục' })).toBeInTheDocument();
     expect(screen.queryByText('Admin products page')).not.toBeInTheDocument();
+  });
+  it('mounts the notification bell only for CUSTOMER', () => {
+    authState = { ...authState, isAuthenticated: true, username: 'customer-a', roles: ['CUSTOMER'] };
+    const view = renderApp('/products');
+
+    expect(screen.getByLabelText('Notification bell')).toBeInTheDocument();
+
+    authState = { ...authState, username: 'admin-a', roles: ['ADMIN'] };
+    view.rerender(
+      <MemoryRouter initialEntries={['/products']}>
+        <App />
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByLabelText('Notification bell')).not.toBeInTheDocument();
   });
 });
 

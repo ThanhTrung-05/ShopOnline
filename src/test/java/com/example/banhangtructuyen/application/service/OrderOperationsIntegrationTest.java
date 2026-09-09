@@ -4,11 +4,13 @@ import com.example.banhangtructuyen.application.dto.order.OperationsOrderRespons
 import com.example.banhangtructuyen.application.dto.order.OrderStatusResponse;
 import com.example.banhangtructuyen.application.service.impl.OrderOperationsServiceImpl;
 import com.example.banhangtructuyen.application.service.impl.OrderStatusServiceImpl;
+import com.example.banhangtructuyen.application.service.impl.NotificationServiceImpl;
 import com.example.banhangtructuyen.config.AuditingConfig;
 import com.example.banhangtructuyen.domain.model.Customer;
 import com.example.banhangtructuyen.domain.model.Order;
 import com.example.banhangtructuyen.domain.model.OrderStatus;
 import com.example.banhangtructuyen.domain.repository.CustomerRepository;
+import com.example.banhangtructuyen.domain.repository.NotificationRepository;
 import com.example.banhangtructuyen.domain.repository.OrderRepository;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.DisplayName;
@@ -28,6 +30,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 @DataJpaTest
 @Import({
         AuditingConfig.class,
+        AuthenticatedCustomerResolver.class,
+        NotificationServiceImpl.class,
         OrderOperationsServiceImpl.class,
         OrderStatusServiceImpl.class
 })
@@ -43,6 +47,9 @@ class OrderOperationsIntegrationTest {
 
     @Autowired
     private OrderRepository orderRepository;
+
+    @Autowired
+    private NotificationRepository notificationRepository;
 
     @Autowired
     private OrderOperationsService orderOperationsService;
@@ -89,5 +96,14 @@ class OrderOperationsIntegrationTest {
         assertThat(customerView.status()).isEqualTo(OrderStatus.CONFIRMED);
         assertThat(Duration.between(updated.updatedAt(), customerView.updatedAt()).abs())
                 .isLessThanOrEqualTo(Duration.ofNanos(1_000));
+        assertThat(notificationRepository
+                .findAllByCustomerIdOrderByCreatedAtDescNotificationIdDesc(customer.getCustomerId()))
+                .singleElement()
+                .satisfies(notification -> {
+                    assertThat(notification.getOrderNumber()).isEqualTo(ORDER_NUMBER);
+                    assertThat(notification.getOldStatus()).isEqualTo(OrderStatus.PENDING);
+                    assertThat(notification.getNewStatus()).isEqualTo(OrderStatus.CONFIRMED);
+                    assertThat(notification.getReadAt()).isNull();
+                });
     }
 }

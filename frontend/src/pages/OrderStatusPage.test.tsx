@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -61,6 +62,14 @@ const orderDetails: OrderDetails = {
   ],
 };
 
+function renderPage(initialEntry = '/orders/status') {
+  return render(
+    <MemoryRouter initialEntries={[initialEntry]}>
+      <OrderStatusPage />
+    </MemoryRouter>,
+  );
+}
+
 describe('OrderStatusPage', () => {
   beforeEach(() => {
     vi.mocked(orderApi.list).mockReset();
@@ -74,7 +83,7 @@ describe('OrderStatusPage', () => {
       data: { data: orders },
     } as any);
 
-    render(<OrderStatusPage />);
+    renderPage();
 
     expect(screen.getByText('Đang tải đơn hàng...')).toBeInTheDocument();
     await waitFor(() => expect(orderApi.list).toHaveBeenCalledTimes(1));
@@ -91,7 +100,7 @@ describe('OrderStatusPage', () => {
       data: { data: [] },
     } as any);
 
-    render(<OrderStatusPage />);
+    renderPage();
 
     expect(await screen.findByText('Bạn chưa có đơn hàng nào.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /ORD-/ })).not.toBeInTheDocument();
@@ -104,7 +113,7 @@ describe('OrderStatusPage', () => {
     vi.mocked(orderApi.getDetails).mockResolvedValue({
       data: { data: orderDetails },
     } as any);
-    render(<OrderStatusPage />);
+    renderPage();
 
     fireEvent.click(await screen.findByRole('button', { name: /ORD-2026-002/ }));
 
@@ -133,7 +142,7 @@ describe('OrderStatusPage', () => {
       data: { data: orders },
     } as any);
     vi.mocked(orderApi.getDetails).mockImplementation(() => new Promise(() => {}));
-    render(<OrderStatusPage />);
+    renderPage();
 
     const selectedButton = await screen.findByRole('button', { name: /ORD-2026-002/ });
     fireEvent.click(selectedButton);
@@ -151,7 +160,7 @@ describe('OrderStatusPage', () => {
     vi.mocked(orderApi.getDetails).mockResolvedValue({
       data: { data: { ...orderDetails, items: [] } },
     } as any);
-    render(<OrderStatusPage />);
+    renderPage();
 
     fireEvent.click(await screen.findByRole('button', { name: /ORD-2026-002/ }));
 
@@ -169,7 +178,7 @@ describe('OrderStatusPage', () => {
         data: { message: 'Order not found with id: ORD-2026-002' },
       },
     });
-    render(<OrderStatusPage />);
+    renderPage();
 
     fireEvent.click(await screen.findByRole('button', { name: /ORD-2026-002/ }));
 
@@ -189,7 +198,7 @@ describe('OrderStatusPage', () => {
         data: { message: 'Không thể tải dữ liệu đơn hàng lúc này.' },
       },
     });
-    render(<OrderStatusPage />);
+    renderPage();
 
     fireEvent.click(await screen.findByRole('button', { name: /ORD-2026-002/ }));
 
@@ -197,5 +206,19 @@ describe('OrderStatusPage', () => {
       'Không thể tải dữ liệu đơn hàng lúc này.',
     );
     expect(toast.error).toHaveBeenCalledWith('Không thể tải dữ liệu đơn hàng lúc này.');
+  });
+
+  it('opens an owned order detail from the notification deep link', async () => {
+    vi.mocked(orderApi.list).mockResolvedValue({
+      data: { data: orders },
+    } as any);
+    vi.mocked(orderApi.getDetails).mockResolvedValue({
+      data: { data: orderDetails },
+    } as any);
+
+    renderPage('/orders/status?orderNumber=ORD-2026-002');
+
+    await waitFor(() => expect(orderApi.getDetails).toHaveBeenCalledWith('ORD-2026-002'));
+    expect(await screen.findByText('Mechanical Keyboard')).toBeInTheDocument();
   });
 });

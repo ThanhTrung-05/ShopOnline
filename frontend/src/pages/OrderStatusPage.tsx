@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import {
@@ -29,6 +30,9 @@ const formatCurrency = (value: number) => new Intl.NumberFormat('vi-VN', {
 }).format(value);
 
 export default function OrderStatusPage() {
+  const [searchParams] = useSearchParams();
+  const requestedOrderNumber = searchParams.get('orderNumber')?.trim() ?? '';
+  const handledRequestedOrder = useRef<string | null>(null);
   const [orders, setOrders] = useState<OrderStatusDetails[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<OrderDetails | null>(null);
   const [loading, setLoading] = useState(true);
@@ -59,11 +63,7 @@ export default function OrderStatusPage() {
     void loadOrders();
   }, [loadOrders]);
 
-  const viewOrderDetails = async (orderNumber: string) => {
-    if (checkingOrderNumber !== null) {
-      return;
-    }
-
+  const loadOrderDetails = useCallback(async (orderNumber: string) => {
     setCheckingOrderNumber(orderNumber);
     setSelectedOrder(null);
     setDetailError(null);
@@ -83,6 +83,25 @@ export default function OrderStatusPage() {
       }
     } finally {
       setCheckingOrderNumber(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!requestedOrderNumber) {
+      handledRequestedOrder.current = null;
+      return;
+    }
+    if (handledRequestedOrder.current === requestedOrderNumber) {
+      return;
+    }
+
+    handledRequestedOrder.current = requestedOrderNumber;
+    void loadOrderDetails(requestedOrderNumber);
+  }, [loadOrderDetails, requestedOrderNumber]);
+
+  const viewOrderDetails = (orderNumber: string) => {
+    if (checkingOrderNumber === null) {
+      void loadOrderDetails(orderNumber);
     }
   };
 
@@ -132,7 +151,7 @@ export default function OrderStatusPage() {
                     key={order.orderNumber}
                     aria-pressed={isSelected}
                     disabled={checkingOrderNumber !== null}
-                    onClick={() => void viewOrderDetails(order.orderNumber)}
+                    onClick={() => viewOrderDetails(order.orderNumber)}
                   >
                     <span className="order-card-header">
                       <span className="order-card-identity">

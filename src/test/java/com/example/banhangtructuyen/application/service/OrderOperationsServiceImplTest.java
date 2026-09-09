@@ -39,11 +39,14 @@ class OrderOperationsServiceImplTest {
     @Mock
     private OrderRepository orderRepository;
 
+    @Mock
+    private NotificationService notificationService;
+
     private OrderOperationsService service;
 
     @BeforeEach
     void setUp() {
-        service = new OrderOperationsServiceImpl(orderRepository);
+        service = new OrderOperationsServiceImpl(orderRepository, notificationService);
     }
 
     @Test
@@ -82,6 +85,8 @@ class OrderOperationsServiceImplTest {
         assertThat(result.updatedAt()).isEqualTo(UPDATED_AT);
         verify(orderRepository).findByOrderNumberForUpdate(ORDER_NUMBER);
         verify(orderRepository).saveAndFlush(order);
+        verify(notificationService)
+                .createOrderStatusChangedNotification(order, currentStatus, targetStatus);
     }
 
     @ParameterizedTest(name = "{0} -> {1}")
@@ -101,6 +106,7 @@ class OrderOperationsServiceImplTest {
         assertThat(order.getStatus()).isEqualTo(currentStatus);
         verify(orderRepository).findByOrderNumberForUpdate(ORDER_NUMBER);
         verify(orderRepository, never()).saveAndFlush(any(Order.class));
+        verifyNoInteractions(notificationService);
     }
 
     @Test
@@ -114,6 +120,7 @@ class OrderOperationsServiceImplTest {
 
         verify(orderRepository).findByOrderNumberForUpdate(ORDER_NUMBER);
         verify(orderRepository, never()).saveAndFlush(any(Order.class));
+        verifyNoInteractions(notificationService);
     }
 
     @Test
@@ -123,7 +130,7 @@ class OrderOperationsServiceImplTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Order status is required");
 
-        verifyNoInteractions(orderRepository);
+        verifyNoInteractions(orderRepository, notificationService);
     }
 
     private static Stream<Arguments> allowedTransitions() {
@@ -156,6 +163,7 @@ class OrderOperationsServiceImplTest {
     private static Order sampleOrder(final String orderNumber, final OrderStatus status) {
         return Order.builder()
                 .orderId(10L)
+                .customerId(20L)
                 .orderNumber(orderNumber)
                 .status(status)
                 .updatedAt(UPDATED_AT)

@@ -1,6 +1,7 @@
 package com.example.banhangtructuyen.application.service.impl;
 
 import com.example.banhangtructuyen.application.dto.order.OperationsOrderResponse;
+import com.example.banhangtructuyen.application.service.NotificationService;
 import com.example.banhangtructuyen.application.service.OrderOperationsService;
 import com.example.banhangtructuyen.domain.exception.ResourceNotFoundException;
 import com.example.banhangtructuyen.domain.model.Order;
@@ -26,6 +27,7 @@ public class OrderOperationsServiceImpl implements OrderOperationsService {
     );
 
     private final OrderRepository orderRepository;
+    private final NotificationService notificationService;
 
     @Override
     public List<OperationsOrderResponse> getOrders() {
@@ -52,7 +54,9 @@ public class OrderOperationsServiceImpl implements OrderOperationsService {
         }
 
         order.setStatus(targetStatus);
-        return toResponse(orderRepository.saveAndFlush(order));
+        final Order savedOrder = orderRepository.saveAndFlush(order);
+        notificationService.createOrderStatusChangedNotification(savedOrder, currentStatus, targetStatus);
+        return toResponse(savedOrder);
     }
 
     private static OperationsOrderResponse toResponse(final Order order) {

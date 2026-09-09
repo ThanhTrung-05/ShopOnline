@@ -297,6 +297,130 @@ h3 {
   gap: 8px;
 }
 
+.notification-shell {
+  position: relative;
+}
+
+.notification-bell {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  font-size: 1.05rem;
+}
+
+.notification-bell:hover,
+.notification-bell[aria-expanded='true'] {
+  border-color: rgba(129, 140, 248, 0.55);
+  background: rgba(129, 140, 248, 0.16);
+}
+
+.notification-count-badge {
+  position: absolute;
+  top: -6px;
+  right: -7px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  display: grid;
+  place-items: center;
+  border: 2px solid #0f0f14;
+  border-radius: 999px;
+  color: #fff;
+  background: #ef4444;
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.notification-panel {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  width: min(380px, calc(100vw - 28px));
+  max-height: min(520px, calc(100vh - 100px));
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  background: #191921;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+
+.notification-panel-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.notification-panel-heading span,
+.notification-meta {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+.notification-list {
+  max-height: 440px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.notification-list li + li {
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.notification-item {
+  width: 100%;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  border: 0;
+  color: var(--text-primary);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.notification-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.notification-item.unread {
+  box-shadow: inset 3px 0 #818cf8;
+  background: rgba(129, 140, 248, 0.1);
+}
+
+.notification-message {
+  line-height: 1.4;
+}
+
+.notification-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.notification-state {
+  margin: 0;
+  padding: 24px 16px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.notification-state-error {
+  color: #fca5a5;
+}
+
 .user-chip {
   gap: 8px;
   max-width: 190px;
@@ -1203,6 +1327,14 @@ h3 {
 
   .auth-actions .btn {
     padding-inline: 12px;
+  }
+
+  .notification-panel {
+    position: fixed;
+    top: 70px;
+    right: 14px;
+    left: 14px;
+    width: auto;
   }
 
   .admin-heading,

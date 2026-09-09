@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Package } from '@phosphor-icons/react';
 import toast from 'react-hot-toast';
 import { useCartStore } from '../store/cartStore';
 import { getApiErrorMessage } from '../utils/apiError';
@@ -70,7 +71,9 @@ export default function CartPage() {
               {items.map((item) => (
                 <article className="card cart-item" key={item.cartItemId}>
                   <div className="cart-item-main">
-                    <span className="product-placeholder">SP</span>
+                    <span className="product-placeholder" aria-hidden="true">
+                      <Package size={22} weight="duotone" />
+                    </span>
                     <div>
                       <h3>{item.productName}</h3>
                       <p>{money(item.unitPrice)} / sản phẩm</p>
