@@ -1,8 +1,15 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { categoryApi } from '../api/categoryApi';
 import { productApi } from '../api/productApi';
 import ProductsPage from './ProductsPage';
+
+vi.mock('../api/categoryApi', () => ({
+  categoryApi: {
+    list: vi.fn(),
+  },
+}));
 
 vi.mock('../api/productApi', () => ({
   productApi: {
@@ -11,7 +18,7 @@ vi.mock('../api/productApi', () => ({
 }));
 
 vi.mock('../components/ProductCard', () => ({
-  default: ({ product, variant }: { product: { id: number; name: string }; variant: string }) => (
+  default: ({ product, variant = 'standard' }: { product: { id: number; name: string }; variant?: string }) => (
     <article data-testid="product-card" data-variant={variant}>{product.name}</article>
   ),
 }));
@@ -49,6 +56,12 @@ const products = [
   },
 ];
 
+const categories = [
+  { categoryId: 1, categoryName: 'Thực phẩm', categoryCode: 'THUC_PHAM', description: 'Thực phẩm mỗi ngày', vatRate: 5, status: 'ACTIVE' },
+  { categoryId: 2, categoryName: 'Điện máy', categoryCode: 'DIEN_MAY', description: 'Thiết bị gia dụng', vatRate: 10, status: 'ACTIVE' },
+  { categoryId: 3, categoryName: 'Sành sứ', categoryCode: 'SANH_SU', description: 'Đồ dùng bàn ăn', vatRate: 10, status: 'ACTIVE' },
+];
+
 const response = (content = products, overrides: Record<string, unknown> = {}) => ({
   data: {
     data: {
@@ -74,6 +87,8 @@ function renderPage() {
 describe('ProductsPage catalog behavior', () => {
   beforeEach(() => {
     vi.mocked(productApi.list).mockReset();
+    vi.mocked(categoryApi.list).mockReset();
+    vi.mocked(categoryApi.list).mockResolvedValue({ data: { data: categories } } as any);
   });
 
   it('keeps the existing initial request while rendering the redesigned loading and product compositions', async () => {
@@ -94,9 +109,7 @@ describe('ProductsPage catalog behavior', () => {
     expect(await screen.findByText('3 sản phẩm')).toBeInTheDocument();
     const cards = screen.getAllByTestId('product-card');
     expect(cards).toHaveLength(3);
-    expect(cards[0]).toHaveAttribute('data-variant', 'featured');
-    expect(cards[1]).toHaveAttribute('data-variant', 'compact');
-    expect(cards[2]).toHaveAttribute('data-variant', 'compact');
+    cards.forEach((card) => expect(card).toHaveAttribute('data-variant', 'standard'));
   });
 
   it('preserves pagination, submitted search and price filters, and immediate category filtering', async () => {
@@ -112,7 +125,7 @@ describe('ProductsPage catalog behavior', () => {
     fireEvent.change(screen.getByLabelText('Tìm sản phẩm'), { target: { value: 'ấm điện' } });
     fireEvent.change(screen.getByLabelText('Giá từ'), { target: { value: '100000' } });
     fireEvent.change(screen.getByLabelText('Giá đến'), { target: { value: '500000' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Tìm kiếm' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Áp dụng' }));
 
     await waitFor(() => expect(productApi.list).toHaveBeenLastCalledWith(
       0, 20, undefined, 'ấm điện', 100000, 500000,
@@ -120,7 +133,7 @@ describe('ProductsPage catalog behavior', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Thực phẩm' }));
     await waitFor(() => expect(productApi.list).toHaveBeenLastCalledWith(
-      0, 20, 'THUC_PHAM', 'ấm điện', 100000, 500000,
+      0, 20, 1, 'ấm điện', 100000, 500000,
     ));
     expect(screen.getByRole('heading', { name: 'Thực phẩm' })).toBeInTheDocument();
   });

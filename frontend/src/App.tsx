@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
-import { List, X } from '@phosphor-icons/react';
-import { Routes, Route, Navigate, NavLink, Link, useLocation } from 'react-router-dom';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { List, MagnifyingGlass, ShoppingBag, SignOut, X } from '@phosphor-icons/react';
+import { Routes, Route, Navigate, NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from './auth/useAuth';
 import { authApi, type SessionData } from './api/authApi';
 import { customerApi } from './api/customerApi';
@@ -74,15 +74,25 @@ function SessionBar() {
     login,
     logout,
   } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const cartItems = useCartStore((state) => state.items);
   const [session, setSession] = useState<SessionData | null>(null);
   const [customerName, setCustomerName] = useState<string | null>(null);
   const [sessionError, setSessionError] = useState<string | null>(null);
   const [navigationOpen, setNavigationOpen] = useState(false);
-  const location = useLocation();
+  const [globalSearch, setGlobalSearch] = useState(
+    () => new URLSearchParams(location.search).get('search') ?? '',
+  );
   const isAdmin = roles.includes('ADMIN');
   const isWarehouse = roles.includes('WAREHOUSE_STAFF');
   const isCustomer = roles.includes('CUSTOMER');
+  const isOperations = isAdmin || isWarehouse;
   const navItems = isAdmin ? ADMIN_NAV : isWarehouse ? WAREHOUSE_NAV : isCustomer ? CUSTOMER_NAV : GUEST_NAV;
+  const cartCount = useMemo(
+    () => cartItems.reduce((count, item) => count + item.quantity, 0),
+    [cartItems],
+  );
   const accountLabel = isAdmin
     ? 'Quản trị viên'
     : isWarehouse
@@ -148,15 +158,63 @@ function SessionBar() {
     setNavigationOpen(false);
   }, [location.pathname]);
 
+  useEffect(() => {
+    if (location.pathname === '/products') {
+      setGlobalSearch(new URLSearchParams(location.search).get('search') ?? '');
+    }
+  }, [location.pathname, location.search]);
+
+  useEffect(() => {
+    if (!navigationOpen) return undefined;
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setNavigationOpen(false);
+    };
+    document.addEventListener('keydown', closeOnEscape);
+    return () => document.removeEventListener('keydown', closeOnEscape);
+  }, [navigationOpen]);
+
+  const submitGlobalSearch = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const params = location.pathname === '/products'
+      ? new URLSearchParams(location.search)
+      : new URLSearchParams();
+    const query = globalSearch.trim();
+    if (query) params.set('search', query);
+    else params.delete('search');
+    params.delete('page');
+    const queryString = params.toString();
+    navigate(`/products${queryString ? `?${queryString}` : ''}`);
+    setNavigationOpen(false);
+  };
+
   const displayName = customerName ?? session?.username ?? username ?? 'Tài khoản';
 
   return (
-    <header className="site-header">
+    <header className={isOperations ? 'site-header site-header--operations' : 'site-header site-header--storefront'}>
       <div className="container header-inner">
         <Link className="brand" to="/" aria-label="ShopOnline">
           <span className="brand-mark">SO</span>
-          <span><strong>ShopOnline</strong><small>Mua sắm trực tuyến</small></span>
+          <span><strong>ShopOnline</strong><small>{isOperations ? 'Không gian vận hành' : 'Mua sắm mỗi ngày'}</small></span>
         </Link>
+
+        {!isOperations && (
+          <form className="header-search" role="search" onSubmit={submitGlobalSearch}>
+            <label className="sr-only" htmlFor="global-product-search">Tìm kiếm sản phẩm</label>
+            <MagnifyingGlass size={19} aria-hidden="true" />
+            <input
+              id="global-product-search"
+              type="search"
+              value={globalSearch}
+              onChange={(event) => setGlobalSearch(event.target.value)}
+              placeholder="Tìm tên sản phẩm..."
+              autoComplete="off"
+            />
+            <button type="submit" aria-label="Tìm kiếm">
+              <MagnifyingGlass size={18} weight="bold" aria-hidden="true" />
+            </button>
+          </form>
+        )}
 
         <button
           type="button"
@@ -182,10 +240,20 @@ function SessionBar() {
             <NavLink
               key={item.to}
               to={item.to}
-              className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}
+              aria-label={item.to === '/cart' && cartCount > 0 ? `Giỏ hàng, ${cartCount} sản phẩm` : undefined}
+              className={({ isActive }) => [
+                'nav-link',
+                item.to === '/cart' ? 'nav-link--cart' : '',
+                item.to.startsWith('/admin') || item.to.startsWith('/operations') ? 'nav-link--operations' : '',
+                isActive ? 'active' : '',
+              ].filter(Boolean).join(' ')}
               onClick={() => setNavigationOpen(false)}
             >
-              {item.label}
+              {item.to === '/cart' && <ShoppingBag size={18} aria-hidden="true" />}
+              <span>{item.label}</span>
+              {item.to === '/cart' && cartCount > 0 && (
+                <span className="cart-count" aria-hidden="true">{cartCount > 99 ? '99+' : cartCount}</span>
+              )}
             </NavLink>
           ))}
         </nav>
@@ -203,7 +271,10 @@ function SessionBar() {
                   <small>{accountLabel}</small>
                 </span>
               </div>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={logout}>Đăng xuất</button>
+              <button type="button" className="btn btn-ghost btn-sm header-logout" onClick={logout}>
+                <SignOut size={17} aria-hidden="true" />
+                <span>Đăng xuất</span>
+              </button>
             </>
           ) : (
             <>
@@ -217,6 +288,45 @@ function SessionBar() {
         <div className="header-error" role="alert">{authError ?? sessionError}</div>
       )}
     </header>
+  );
+}
+
+function AppFooter() {
+  const { isAuthenticated, roles = [] } = useAuth();
+  const isAdmin = roles.includes('ADMIN');
+  const isWarehouse = roles.includes('WAREHOUSE_STAFF');
+  const isCustomer = roles.includes('CUSTOMER');
+
+  if (isAdmin || isWarehouse) {
+    return (
+      <footer className="site-footer site-footer--operations">
+        <div className="container footer-inner">
+          <div><strong>ShopOnline</strong><span>Không gian vận hành</span></div>
+          <p>{isAdmin ? 'Quản lý danh mục, sản phẩm và đơn hàng trong cùng một quy trình.' : 'Theo dõi và cập nhật đơn hàng trong một quy trình tập trung.'}</p>
+        </div>
+      </footer>
+    );
+  }
+
+  return (
+    <footer className="site-footer">
+      <div className="container footer-grid">
+        <div className="footer-brand">
+          <span className="brand-mark" aria-hidden="true">SO</span>
+          <div>
+            <strong>ShopOnline</strong>
+            <p>Mua sắm thiết yếu, tìm kiếm rõ ràng và theo dõi đơn hàng trong một tài khoản.</p>
+          </div>
+        </div>
+        <nav className="footer-links" aria-label="Điều hướng cuối trang">
+          <Link to="/products">Sản phẩm</Link>
+          {isCustomer && <Link to="/cart">Giỏ hàng</Link>}
+          {isCustomer && <Link to="/orders/status">Đơn hàng</Link>}
+          {isCustomer && <Link to="/addresses">Địa chỉ</Link>}
+          {!isAuthenticated && <Link to="/register">Tạo tài khoản</Link>}
+        </nav>
+      </div>
+    </footer>
   );
 }
 
@@ -249,6 +359,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
+      <AppFooter />
     </div>
   );
 }

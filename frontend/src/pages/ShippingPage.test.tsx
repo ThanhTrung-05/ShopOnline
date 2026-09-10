@@ -97,7 +97,7 @@ function renderPage() {
 }
 
 async function addressChoices() {
-  const group = await screen.findByRole('radiogroup', { name: 'Chọn địa chỉ giao hàng' });
+  const group = await screen.findByRole('radiogroup', { name: 'Nơi nhận hàng' });
   return {
     defaultAddress: within(group).getByRole('radio', { name: /Nguyễn Văn A/ }),
     otherAddress: within(group).getByRole('radio', { name: /Trần Thị B/ }),
@@ -105,10 +105,10 @@ async function addressChoices() {
 }
 
 function methodChoices() {
-  const group = screen.getByRole('radiogroup', { name: 'Chọn phương thức giao hàng' });
+  const group = screen.getByRole('radiogroup', { name: 'Phương thức giao hàng' });
   return {
-    standard: within(group).getByRole('radio', { name: /STANDARD/ }),
-    express: within(group).getByRole('radio', { name: /EXPRESS/ }),
+    standard: within(group).getByRole('radio', { name: /Giao hàng tiêu chuẩn/ }),
+    express: within(group).getByRole('radio', { name: /Giao hàng nhanh/ }),
   };
 }
 
@@ -123,7 +123,7 @@ describe('ShippingPage', () => {
     vi.mocked(toast.success).mockReset();
     vi.mocked(toast.error).mockReset();
     clearLocalCart.mockReset();
-    useCartStore.setState({ clearLocal: clearLocalCart });
+    useCartStore.setState({ items: [], subtotal: 0, clearLocal: clearLocalCart });
     vi.mocked(addressApi.list).mockResolvedValue({
       data: { data: addresses },
     } as any);
@@ -135,8 +135,8 @@ describe('ShippingPage', () => {
 
     const { defaultAddress, otherAddress } = await addressChoices();
 
-    expect(screen.getByText(/Nguyễn Văn A/)).toBeInTheDocument();
-    expect(screen.getByText(/Trần Thị B/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Nguyễn Văn A/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Trần Thị B/).length).toBeGreaterThan(0);
     expect(defaultAddress).toBeChecked();
     expect(otherAddress).not.toBeChecked();
     expect(screen.getByText(/Mặc định/)).toBeInTheDocument();
@@ -216,8 +216,8 @@ describe('ShippingPage', () => {
       style: 'currency',
       currency: 'VND',
     }).format(40000);
-    expect(within(result).getByText('EXPRESS')).toBeInTheDocument();
-    expect(within(result).getByText('NEARBY')).toBeInTheDocument();
+    expect(within(result).getByText('Giao hàng nhanh')).toBeInTheDocument();
+    expect(within(result).getByText('Khu vực lân cận')).toBeInTheDocument();
     expect(within(result).getByText((_, element) =>
       element?.tagName === 'STRONG' && element.textContent === formattedFee,
     )).toBeInTheDocument();

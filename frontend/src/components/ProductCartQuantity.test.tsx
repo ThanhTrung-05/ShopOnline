@@ -208,7 +208,7 @@ describe('product cart quantity display', () => {
     renderCard();
     expect(screen.getByText('Còn 20')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: '+ Thêm vào giỏ' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Thêm vào giỏ' }));
 
     await waitFor(() => expect(screen.getByLabelText('Số lượng trong giỏ của Rice')).toHaveTextContent('1'));
     expect(screen.getByText('Còn 20')).toBeInTheDocument();
@@ -219,7 +219,7 @@ describe('product cart quantity display', () => {
 
     renderCard();
 
-    expect(screen.queryByRole('button', { name: '+ Thêm vào giỏ' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Thêm vào giỏ' })).not.toBeInTheDocument();
   });
 
   it('keeps product detail stock unchanged after quantity update while cart quantity changes', async () => {
@@ -284,7 +284,7 @@ describe('ATS-12 stock warning behavior', () => {
     expect(screen.getByLabelText('Số lượng trong giỏ của Rice')).toHaveTextContent('20');
     expect(screen.getByText('Còn 20')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: '+ Thêm vào giỏ' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Thêm vào giỏ' }));
 
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith(INSUFFICIENT_STOCK_WARNING));
     expect(screen.getByLabelText('Số lượng trong giỏ của Rice')).toHaveTextContent('20');

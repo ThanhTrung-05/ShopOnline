@@ -1,10 +1,11 @@
 import { Link } from 'react-router-dom';
-import { Package, ShoppingBag } from '@phosphor-icons/react';
+import { ShoppingBag } from '@phosphor-icons/react';
 import { useCartStore } from '../store/cartStore';
 import { useAuth } from '../auth/useAuth';
 import toast from 'react-hot-toast';
 import type { Product } from '../types';
 import { INSUFFICIENT_STOCK_WARNING, isInsufficientStockError } from '../utils/cartErrorMessages';
+import ProductImage from './ProductImage';
 
 export type ProductCardVariant = 'featured' | 'compact' | 'standard' | 'landscape';
 
@@ -51,30 +52,25 @@ export default function ProductCard({ product, variant = 'standard' }: Props) {
         aria-label={`Xem ${product.name}`}
       >
         <figure className="product-card-media">
-          {product.imageUrl ? (
-            <img src={product.imageUrl} alt={product.name} loading="lazy" />
-          ) : (
-            <span className="product-card-placeholder" aria-hidden="true">
-              <Package size={42} weight="duotone" />
-            </span>
-          )}
+          <ProductImage src={product.imageUrl} alt={product.name} />
         </figure>
       </Link>
 
       <div className="product-card-content">
         <div className="product-card-body">
-          <p className="product-card-category">{product.categoryName}</p>
+          <div className="product-card-context">
+            <p className="product-card-category">{product.categoryName}</p>
+            <span className={`product-stock ${isOutOfStock ? 'out' : product.inventoryCount < 10 ? 'low' : 'available'}`}>
+              {isOutOfStock ? 'Hết hàng' : `Còn ${product.inventoryCount}`}
+            </span>
+          </div>
           <h3 className="product-card-title">
             <Link to={`/products/${product.id}`}>{product.name}</Link>
           </h3>
 
           <div className="product-card-meta">
-            <strong className="product-card-price">
-              {product.price.toLocaleString('vi-VN')}₫
-            </strong>
-            <span className={`product-stock ${isOutOfStock ? 'out' : product.inventoryCount < 10 ? 'low' : 'available'}`}>
-              {isOutOfStock ? 'Hết hàng' : `Còn ${product.inventoryCount}`}
-            </span>
+            <span>Giá niêm yết</span>
+            <strong className="product-card-price">{product.price.toLocaleString('vi-VN')}₫</strong>
           </div>
         </div>
 
@@ -86,10 +82,10 @@ export default function ProductCard({ product, variant = 'standard' }: Props) {
               disabled={isOutOfStock}
             >
               {!isOutOfStock && <ShoppingBag size={17} weight="bold" aria-hidden="true" />}
-              {isOutOfStock ? 'Hết hàng' : '+ Thêm vào giỏ'}
+              {isOutOfStock ? 'Hết hàng' : 'Thêm vào giỏ'}
             </button>
             {cartItem && (
-              <span className="product-in-cart" aria-label={`Số lượng trong giỏ của ${product.name}`}>
+              <span className="product-in-cart" aria-live="polite" aria-label={`Số lượng trong giỏ của ${product.name}`}>
                 Trong giỏ: {cartItem.quantity}
               </span>
             )}

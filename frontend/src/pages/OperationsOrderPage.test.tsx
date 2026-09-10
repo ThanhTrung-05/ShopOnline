@@ -94,7 +94,7 @@ describe('OperationsOrderPage', () => {
     await waitFor(() => expect(operationsOrderApi.updateStatus)
       .toHaveBeenCalledWith('ORD-PENDING', 'CONFIRMED'));
     await waitFor(() => expect(operationsOrderApi.list).toHaveBeenCalledTimes(2));
-    expect(await screen.findByText('Đã xác nhận')).toBeInTheDocument();
+    expect(orderRow('ORD-PENDING').getByText('Đã xác nhận')).toBeInTheDocument();
     expect(toast.success).toHaveBeenCalledWith('Cập nhật trạng thái đơn hàng thành công.');
   });
 
