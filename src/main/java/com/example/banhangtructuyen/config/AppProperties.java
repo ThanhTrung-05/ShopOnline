@@ -24,5 +24,6 @@ public class AppProperties {
     public static class Ttl {
         private int productList = 300;
         private int productDetail = 600;
+        private int featuredProducts = 300;
     }
 }

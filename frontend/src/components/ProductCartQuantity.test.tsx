@@ -54,6 +54,7 @@ const product = {
   categoryName: 'Food',
   inventoryCount: 20,
   status: 'ACTIVE',
+  featured: false,
 };
 
 function cart(quantity: number) {

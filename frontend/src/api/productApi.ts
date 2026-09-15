@@ -20,6 +20,7 @@ export interface ProductDetail {
   categoryName: string;
   inventoryCount: number;
   status: string;
+  featured: boolean;
 }
 
 export const productApi = {
@@ -37,4 +38,7 @@ export const productApi = {
 
   detail: (id: number) =>
     apiClient.get<ApiResponse<ProductDetail>>(`/products/${id}`),
+
+  featured: () =>
+    apiClient.get<ApiResponse<Product[]>>('/products/featured'),
 };

@@ -8,6 +8,7 @@ import AuthGate from './components/AuthGate';
 import NotificationBell from './components/NotificationBell';
 import RegisterPage from './pages/RegisterPage';
 import ProductsPage from './pages/ProductsPage';
+import HomePage from './pages/HomePage';
 import ProductDetailPage from './pages/ProductDetailPage';
 import CartPage from './pages/CartPage';
 import ProfilePage from './pages/ProfilePage';
@@ -40,7 +41,7 @@ const WAREHOUSE_NAV: NavItem[] = [
   { to: '/operations/orders', label: 'Quản lý đơn hàng' },
 ];
 
-function RoleLandingRedirect() {
+function RoleLanding() {
   const { isInitializing, roles } = useAuth();
 
   if (isInitializing) {
@@ -56,12 +57,9 @@ function RoleLandingRedirect() {
     );
   }
 
-  const destination = roles.includes('ADMIN')
-    ? '/admin/products'
-    : roles.includes('WAREHOUSE_STAFF')
-      ? '/operations/orders'
-      : '/products';
-  return <Navigate to={destination} replace />;
+  if (roles.includes('ADMIN')) return <Navigate to="/admin/products" replace />;
+  if (roles.includes('WAREHOUSE_STAFF')) return <Navigate to="/operations/orders" replace />;
+  return <HomePage />;
 }
 
 function SessionBar() {
@@ -337,7 +335,7 @@ export default function App() {
       <SessionBar />
       <div id="main-content" className="app-content" tabIndex={-1}>
         <Routes>
-          <Route path="/" element={<RoleLandingRedirect />} />
+          <Route path="/" element={<RoleLanding />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/products" element={<ProductsPage />} />
           <Route path="/products/:id" element={<ProductDetailPage />} />

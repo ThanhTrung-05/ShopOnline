@@ -94,6 +94,7 @@ class ProductServiceTest {
                 .categoryId(1L)
                 .categoryCode("THUC_PHAM")
                 .categoryName("Thực phẩm")
+                .vatRate(new BigDecimal("5.00"))
                 .status(Category.CategoryStatus.ACTIVE)
                 .build();
 
@@ -202,6 +203,27 @@ class ProductServiceTest {
 
             assertThat(result.name()).isEqualTo("Gạo ST25 5kg");
             verify(productRepository).save(any(Product.class));
+            verify(redisTemplate).delete(CacheKeys.FEATURED_PRODUCTS);
+        }
+
+        @Test
+        @DisplayName("Admin can turn featured on and off")
+        void update_togglesFeatured() {
+            final Category category = activeProduct.getCategory();
+            when(categoryRepository.findById(1L)).thenReturn(Optional.of(category));
+            when(productRepository.findByIdWithInventory(1L)).thenReturn(Optional.of(activeProduct));
+            when(productRepository.existsByProductSlugAndProductIdNot("TP001", 1L)).thenReturn(false);
+            when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            final ProductRequest featureRequest = new ProductRequest("Gạo ST25 5kg", "TP001", 1L, "desc",
+                    new BigDecimal("180000"), null, "ACTIVE", true, 100);
+            assertThat(productService.update(1L, featureRequest).featured()).isTrue();
+            assertThat(activeProduct.isFeatured()).isTrue();
+
+            final ProductRequest unfeatureRequest = new ProductRequest("Gạo ST25 5kg", "TP001", 1L, "desc",
+                    new BigDecimal("180000"), null, "ACTIVE", false, 100);
+            assertThat(productService.update(1L, unfeatureRequest).featured()).isFalse();
+            assertThat(activeProduct.isFeatured()).isFalse();
         }
 
         @Test
@@ -366,6 +388,40 @@ class ProductServiceTest {
             // Assert
             assertThat(result.getContent()).isEmpty();
             assertThat(result.getTotalElements()).isZero();
+        }
+    }
+
+    @Nested
+    @DisplayName("findFeatured — Home product list")
+    class FindFeatured {
+
+        @Test
+        @DisplayName("Cache MISS reads at most eight products and writes the dedicated cache")
+        void findFeatured_cacheMiss_limitsAndCaches() {
+            activeProduct.setFeatured(true);
+            when(valueOps.get(CacheKeys.FEATURED_PRODUCTS)).thenReturn(null);
+            when(productRepository.findFeaturedProducts(any(PageRequest.class)))
+                    .thenReturn(java.util.Collections.nCopies(10, activeProduct));
+
+            final List<ProductResponse> result = productService.findFeatured();
+
+            assertThat(result).hasSize(8).allMatch(ProductResponse::featured);
+            verify(productRepository).findFeaturedProducts(argThat(pageable ->
+                    pageable.getPageNumber() == 0 && pageable.getPageSize() == 8));
+            verify(valueOps).set(eq(CacheKeys.FEATURED_PRODUCTS), anyString(), any());
+        }
+
+        @Test
+        @DisplayName("Cache HIT returns no more than eight products without reading the database")
+        void findFeatured_cacheHit_limitsWithoutDatabaseRead() throws Exception {
+            final ProductResponse featuredResponse = new ProductResponse(
+                    1L, "Gạo ST25 5kg", "TP001", new BigDecimal("180000"), null, null,
+                    1L, "Thực phẩm", 95, "ACTIVE", true);
+            when(valueOps.get(CacheKeys.FEATURED_PRODUCTS)).thenReturn(
+                    objectMapper.writeValueAsString(java.util.Collections.nCopies(10, featuredResponse)));
+
+            assertThat(productService.findFeatured()).hasSize(8);
+            verifyNoInteractions(productRepository);
         }
     }
 

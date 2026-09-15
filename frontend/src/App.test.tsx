@@ -35,6 +35,7 @@ vi.mock('./components/NotificationBell', () => ({
 }));
 
 vi.mock('./pages/ProductsPage', () => ({ default: () => <div>Products page</div> }));
+vi.mock('./pages/HomePage', () => ({ default: () => <div>Home page</div> }));
 vi.mock('./pages/ProductDetailPage', () => ({ default: () => <div>Product detail page</div> }));
 vi.mock('./pages/RegisterPage', () => ({ default: () => <div>Register page</div> }));
 vi.mock('./pages/CartPage', () => ({ default: () => <div>Cart page</div> }));
@@ -113,10 +114,10 @@ describe('App navigation and route guards', () => {
     expect(screen.getByRole('button', { name: 'Mở điều hướng' })).toHaveAttribute('aria-expanded', 'false');
   });
 
-  it('redirects a guest from Home to Products and shows guest navigation', async () => {
+  it('shows Home to a guest and keeps guest navigation', async () => {
     renderApp('/');
 
-    expect(await screen.findByText('Products page')).toBeInTheDocument();
+    expect(await screen.findByText('Home page')).toBeInTheDocument();
     const navigation = mainNavigation();
     expect(within(navigation).getByRole('link', { name: 'Sản phẩm' })).toBeInTheDocument();
     expect(within(navigation).queryByRole('link', { name: 'Giỏ hàng' })).not.toBeInTheDocument();
@@ -125,12 +126,12 @@ describe('App navigation and route guards', () => {
     expect(screen.queryByText('Home')).not.toBeInTheDocument();
   });
 
-  it('redirects CUSTOMER to Products and shows only customer navigation', async () => {
+  it('shows Home to CUSTOMER and keeps customer navigation', async () => {
     authState = { ...authState, isAuthenticated: true, username: 'customer-a', roles: ['CUSTOMER'] };
 
     renderApp('/');
 
-    expect(await screen.findByText('Products page')).toBeInTheDocument();
+    expect(await screen.findByText('Home page')).toBeInTheDocument();
     const navigation = mainNavigation();
     for (const label of ['Sản phẩm', 'Giỏ hàng', 'Hồ sơ', 'Địa chỉ', 'Giao hàng', 'Theo dõi đơn hàng']) {
       expect(within(navigation).getByRole('link', { name: label })).toBeInTheDocument();

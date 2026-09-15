@@ -6,11 +6,15 @@ import com.example.banhangtructuyen.application.dto.product.ProductResponse;
 import org.springframework.data.domain.Page;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 public interface ProductService {
 
     Page<ProductResponse> findAll(int page, int size, Long categoryId, String search,
                                   BigDecimal minPrice, BigDecimal maxPrice);
+
+    /** Returns at most eight ACTIVE featured products, newest update first. */
+    List<ProductResponse> findFeatured();
 
     /** Returns basic product info — used by ATS-2 product list. */
     ProductResponse findById(Long productId);

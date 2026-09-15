@@ -194,6 +194,26 @@ class ProductControllerTest {
         }
     }
 
+    @Nested
+    @DisplayName("GET /api/v1/products/featured — Featured Product List")
+    class ListFeaturedProducts {
+
+        @Test
+        @DisplayName("200 — public endpoint returns featured products")
+        void listFeaturedProducts_shouldReturn200_withoutAuthentication() throws Exception {
+            final ProductResponse featured = new ProductResponse(
+                    1L, "Gạo ST25 5kg", "TP001", new BigDecimal("180000"), null, null,
+                    1L, "Thực phẩm", 95, "ACTIVE", true);
+            when(productService.findFeatured()).thenReturn(List.of(featured));
+
+            mockMvc.perform(get("/api/v1/products/featured"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.success").value(true))
+                    .andExpect(jsonPath("$.data", hasSize(1)))
+                    .andExpect(jsonPath("$.data[0].featured").value(true));
+        }
+    }
+
     // ══════════════════════════════════════════════════════════════════════
     // GET /api/v1/products/{id}
     // ══════════════════════════════════════════════════════════════════════

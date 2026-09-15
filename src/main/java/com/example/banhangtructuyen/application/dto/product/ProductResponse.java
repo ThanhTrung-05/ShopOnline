@@ -38,6 +38,16 @@ public record ProductResponse(
         int inventoryCount,
 
         @Schema(description = "Product lifecycle status", example = "ACTIVE", allowableValues = {"ACTIVE", "INACTIVE", "DELETED"})
-        String status
-) {}
+        String status,
+
+        @Schema(description = "Whether the product is featured on the storefront HomePage", example = "true")
+        boolean featured
+) {
+    public ProductResponse(final Long id, final String name, final String slug, final BigDecimal price,
+                           final String imageUrl, final String description, final Long categoryId,
+                           final String categoryName, final int inventoryCount, final String status) {
+        this(id, name, slug, price, imageUrl, description, categoryId, categoryName,
+                inventoryCount, status, false);
+    }
+}
 

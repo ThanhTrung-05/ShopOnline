@@ -9,6 +9,7 @@ export interface ProductRequest {
   price: number;
   imageUrl?: string;
   status: string;
+  featured: boolean;
   initialQuantity: number;
 }
 

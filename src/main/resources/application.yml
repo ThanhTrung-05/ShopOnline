@@ -14,6 +14,7 @@ app:
     ttl:
       product-list: 300
       product-detail: 600
+      featured-products: 300
   shipping:
     fees:
       LOCAL:

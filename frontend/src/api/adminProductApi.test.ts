@@ -20,6 +20,7 @@ const request: ProductRequest = {
   price: 120000,
   imageUrl: 'https://example.com/rice.jpg',
   status: 'ACTIVE',
+  featured: true,
   initialQuantity: 20,
 };
 

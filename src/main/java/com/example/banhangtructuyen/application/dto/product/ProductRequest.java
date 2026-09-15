@@ -44,8 +44,17 @@ public record ProductRequest(
         @Pattern(regexp = "ACTIVE|INACTIVE|DELETED", message = "Status must be ACTIVE, INACTIVE or DELETED")
         String status,
 
+        @Schema(description = "Whether the product is featured on the storefront HomePage", example = "false")
+        boolean featured,
+
         @Schema(description = "Initial stock quantity (used only on creation)", example = "100")
         @NotNull(message = "Initial quantity is required")
         @Min(value = 0, message = "Initial quantity must not be negative")
         Integer initialQuantity
-) {}
+) {
+    public ProductRequest(final String productName, final String productSlug, final Long categoryId,
+                          final String description, final BigDecimal price, final String imageUrl,
+                          final String status, final Integer initialQuantity) {
+        this(productName, productSlug, categoryId, description, price, imageUrl, status, false, initialQuantity);
+    }
+}

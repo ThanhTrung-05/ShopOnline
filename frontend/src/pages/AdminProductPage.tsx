@@ -11,7 +11,7 @@ import { getApiErrorMessage } from '../utils/apiError';
 const GENERIC_ERROR = 'Có lỗi xảy ra. Vui lòng thử lại.';
 
 function emptyProduct(categoryId = 0): ProductRequest {
-  return { productName: '', productSlug: '', categoryId, description: '', price: 0, imageUrl: '', status: 'ACTIVE', initialQuantity: 0 };
+  return { productName: '', productSlug: '', categoryId, description: '', price: 0, imageUrl: '', status: 'ACTIVE', featured: false, initialQuantity: 0 };
 }
 
 function formatPrice(price: number) {
@@ -93,6 +93,7 @@ export default function AdminProductPage() {
       price: product.price,
       imageUrl: product.imageUrl ?? '',
       status: product.status,
+      featured: product.featured,
       initialQuantity: product.inventoryCount,
     });
     setFormError(null);
@@ -168,12 +169,12 @@ export default function AdminProductPage() {
         <section className="table-shell" aria-label="Danh sách sản phẩm">
           <div className="table-scroll">
             <table className="admin-table admin-product-table">
-              <thead><tr><th>Sản phẩm</th><th>Danh mục</th><th>VAT</th><th>Giá trước VAT</th><th>Tồn kho</th><th>Trạng thái</th><th><span className="sr-only">Thao tác</span></th></tr></thead>
+              <thead><tr><th>Sản phẩm</th><th>Danh mục</th><th>VAT</th><th>Giá trước VAT</th><th>Tồn kho</th><th>Nổi bật</th><th>Trạng thái</th><th><span className="sr-only">Thao tác</span></th></tr></thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={7}><div className="table-state"><span className="spinner spinner-dark" /> Đang tải sản phẩm...</div></td></tr>
+                  <tr><td colSpan={8}><div className="table-state"><span className="spinner spinner-dark" /> Đang tải sản phẩm...</div></td></tr>
                 ) : error ? null : visibleProducts.length === 0 ? (
-                  <tr><td colSpan={7}><div className="table-state"><Package size={24} aria-hidden="true" /> Chưa có sản phẩm phù hợp.</div></td></tr>
+                  <tr><td colSpan={8}><div className="table-state"><Package size={24} aria-hidden="true" /> Chưa có sản phẩm phù hợp.</div></td></tr>
                 ) : visibleProducts.map((product) => {
                   const category = categoryById.get(product.categoryId);
                   return (
@@ -183,6 +184,7 @@ export default function AdminProductPage() {
                       <td data-label="VAT">{category ? `${category.vatRate}%` : 'Chưa có'}</td>
                       <td data-label="Giá trước VAT" className="price-cell">{formatPrice(product.price)}</td>
                       <td data-label="Tồn kho"><strong className={product.inventoryCount < 10 ? 'stock-value stock-value--low' : 'stock-value'}>{product.inventoryCount}</strong></td>
+                      <td data-label="Nổi bật"><span className={`status-badge ${product.featured ? 'status-active' : 'status-inactive'}`}>{product.featured ? 'Có' : 'Không'}</span></td>
                       <td data-label="Trạng thái"><span className={`status-badge status-${product.status.toLowerCase()}`}>{statusLabel(product.status)}</span></td>
                       <td data-label="Thao tác"><div className="table-actions"><button type="button" className="btn btn-ghost btn-sm" onClick={() => handleOpenEdit(product)}>Sửa</button><button type="button" className="btn btn-danger btn-sm" disabled={deletingId !== null} onClick={() => setDeleteTarget(product)}>Xóa</button></div></td>
                     </tr>
@@ -208,6 +210,7 @@ export default function AdminProductPage() {
               <label className="field field-span-2"><span>Địa chỉ hình ảnh</span><input type="url" className="form-input" placeholder="https://" value={formData.imageUrl} onChange={(event) => setFormData({ ...formData, imageUrl: event.target.value })} /></label>
               <label className="field field-span-2"><span>Mô tả</span><textarea className="form-input admin-textarea" value={formData.description} onChange={(event) => setFormData({ ...formData, description: event.target.value })} /></label>
               <label className="field field-span-2"><span>Trạng thái</span><select className="form-input" value={formData.status} onChange={(event) => setFormData({ ...formData, status: event.target.value })}><option value="ACTIVE">Đang bán</option><option value="INACTIVE">Ngừng bán</option></select></label>
+              <label className="field field-span-2"><span>Hiển thị trên trang chủ</span><span className="featured-control"><input type="checkbox" aria-label="Sản phẩm nổi bật" checked={formData.featured} onChange={(event) => setFormData({ ...formData, featured: event.target.checked })} /><span>Đánh dấu là sản phẩm nổi bật</span></span></label>
             </div>
             <aside className="admin-image-preview"><span>Xem trước hình ảnh</span><figure><ProductImage src={formData.imageUrl} alt={formData.productName || 'Sản phẩm mới'} /></figure><small>Ảnh lỗi hoặc bỏ trống sẽ dùng hình thay thế của ShopOnline.</small></aside>
             {formError && <div className="alert alert-error admin-form-error" role="alert">{formError}</div>}

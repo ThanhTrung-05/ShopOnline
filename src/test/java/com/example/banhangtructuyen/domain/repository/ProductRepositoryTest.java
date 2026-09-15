@@ -12,6 +12,8 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
@@ -46,12 +48,19 @@ class ProductRepositoryTest {
 
     private Product persistProduct(final Category category, final String slug,
                                     final BigDecimal price, final Product.ProductStatus status) {
+        return persistProduct(category, slug, price, status, false);
+    }
+
+    private Product persistProduct(final Category category, final String slug,
+                                    final BigDecimal price, final Product.ProductStatus status,
+                                    final boolean featured) {
         final Product product = Product.builder()
                 .productSlug(slug)
                 .category(category)
                 .productName(slug)
                 .price(price)
                 .status(status)
+                .featured(featured)
                 .build();
         return entityManager.persistFlushFind(product);
     }
@@ -201,6 +210,44 @@ class ProductRepositoryTest {
     }
 
     @Test
+    @DisplayName("findFeaturedProducts returns only ACTIVE featured products, newest first, capped by pageable")
+    void findFeaturedProducts_filtersSortsAndLimits() {
+        final Category category = persistCategory("FEATURED", new BigDecimal("10.00"));
+        final java.util.ArrayList<Product> featuredProducts = new java.util.ArrayList<>();
+        for (int index = 1; index <= 9; index++) {
+            final Product product = persistProduct(category, "featured-" + index,
+                    BigDecimal.valueOf(index * 1000L), Product.ProductStatus.ACTIVE, true);
+            persistInventory(product, 10, 0);
+            featuredProducts.add(product);
+        }
+        final Product inactive = persistProduct(category, "featured-inactive",
+                BigDecimal.TEN, Product.ProductStatus.INACTIVE, true);
+        persistInventory(inactive, 10, 0);
+        final Product standard = persistProduct(category, "standard-active",
+                BigDecimal.TEN, Product.ProductStatus.ACTIVE, false);
+        persistInventory(standard, 10, 0);
+
+        for (int index = 0; index < featuredProducts.size(); index++) {
+            entityManager.getEntityManager().createQuery(
+                            "UPDATE Product p SET p.updatedAt = :updatedAt WHERE p.productId = :id")
+                    .setParameter("updatedAt", Instant.parse("2026-09-01T00:00:0" + index + "Z"))
+                    .setParameter("id", featuredProducts.get(index).getProductId())
+                    .executeUpdate();
+        }
+        entityManager.clear();
+
+        final List<Product> result = productRepository.findFeaturedProducts(
+                org.springframework.data.domain.PageRequest.of(0, 8));
+
+        assertThat(result).hasSize(8);
+        assertThat(result).allMatch(product -> product.getStatus() == Product.ProductStatus.ACTIVE
+                && product.isFeatured());
+        assertThat(result).extracting(Product::getProductSlug)
+                .containsExactly("featured-9", "featured-8", "featured-7", "featured-6",
+                        "featured-5", "featured-4", "featured-3", "featured-2");
+    }
+
+    @Test
     @DisplayName("soft-delete — status DELETED makes product invisible to public findActiveById")
     void softDelete_productInvisibleToPublicQuery_afterStatusDeleted() {
         final Category category = persistCategory("HOUSEHOLD-SD", new BigDecimal("10.00"));
@@ -210,7 +257,8 @@ class ProductRepositoryTest {
 
         // Simulate soft delete
         product.setStatus(Product.ProductStatus.DELETED);
-        entityManager.persistAndFlush(product);
+        entityManager.merge(product);
+        entityManager.flush();
         entityManager.clear();
 
         assertThat(productRepository.findActiveById(product.getProductId())).isEmpty();
