@@ -4,6 +4,8 @@ import java.math.BigDecimal;
 
 public final class CacheKeys {
 
+    public static final String FEATURED_PRODUCTS = "product:featured";
+
     private CacheKeys() {
     }
 

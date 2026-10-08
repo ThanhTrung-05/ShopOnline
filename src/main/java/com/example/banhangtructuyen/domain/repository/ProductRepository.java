@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
+import java.util.List;
 
 public interface ProductRepository extends JpaRepository<Product, Long> {
 
@@ -34,6 +35,16 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             WHERE p.productId = :id AND p.status = 'ACTIVE'
             """)
     Optional<Product> findActiveById(@Param("id") Long id);
+
+    @Query("""
+            SELECT p FROM Product p
+            JOIN FETCH p.category
+            JOIN FETCH p.inventory
+            WHERE p.status = 'ACTIVE'
+              AND p.featured = true
+            ORDER BY p.updatedAt DESC, p.productId DESC
+            """)
+    List<Product> findFeaturedProducts(Pageable pageable);
 
     @Query("""
             SELECT p FROM Product p

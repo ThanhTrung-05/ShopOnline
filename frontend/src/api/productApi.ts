@@ -1,7 +1,7 @@
 import apiClient from './axios';
 import type { ApiResponse, PageResponse, Product } from '../types';
 
-/** Detailed product response from GET /api/v1/products/{id} — includes VAT breakdown */
+/** Detailed product response from GET /api/v1/products/{id}, including VAT breakdown. */
 export interface ProductDetail {
   id: number;
   name: string;
@@ -20,21 +20,25 @@ export interface ProductDetail {
   categoryName: string;
   inventoryCount: number;
   status: string;
+  featured: boolean;
 }
 
 export const productApi = {
   list: (
     page = 0,
     size = 20,
-    category?: string,
+    categoryId?: number,
     search?: string,
     minPrice?: number,
     maxPrice?: number,
   ) =>
     apiClient.get<ApiResponse<PageResponse<Product>>>('/products', {
-      params: { page, size, category, search, minPrice, maxPrice },
+      params: { page, size, categoryId, search, minPrice, maxPrice },
     }),
 
   detail: (id: number) =>
     apiClient.get<ApiResponse<ProductDetail>>(`/products/${id}`),
+
+  featured: () =>
+    apiClient.get<ApiResponse<Product[]>>('/products/featured'),
 };

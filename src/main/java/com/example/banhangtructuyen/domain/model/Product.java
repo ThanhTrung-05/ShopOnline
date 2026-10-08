@@ -52,6 +52,9 @@ public class Product {
     @Enumerated(EnumType.STRING)
     private ProductStatus status;
 
+    @Column(name = "FEATURED", nullable = false)
+    private boolean featured;
+
     @Version
     @Column(name = "VERSION", nullable = false)
     private Long version;

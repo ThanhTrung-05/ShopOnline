@@ -23,6 +23,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 /**
  * Public REST controller for the product catalog.
@@ -84,6 +85,15 @@ public class ProductController {
 
         final Page<ProductResponse> result = productService.findAll(page, size, categoryId, search, minPrice, maxPrice);
         return ResponseEntity.ok(com.example.banhangtructuyen.application.dto.ApiResponse.success(result));
+    }
+
+    @Operation(
+        summary = "List featured products",
+        description = "Returns at most eight active featured products, ordered by latest update first."
+    )
+    @GetMapping("/featured")
+    public ResponseEntity<ApiResponse<List<ProductResponse>>> listFeaturedProducts() {
+        return ResponseEntity.ok(ApiResponse.success(productService.findFeatured()));
     }
 
     /**

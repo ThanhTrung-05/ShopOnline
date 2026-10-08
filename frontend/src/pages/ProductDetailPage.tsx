@@ -1,30 +1,60 @@
-import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { productApi, ProductDetail } from '../api/productApi';
-import { useCartStore } from '../store/cartStore';
-import { useAuth } from '../auth/useAuth';
+import { useCallback, useEffect, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import {
+  ArrowLeft,
+  CheckCircle,
+  Minus,
+  Plus,
+  ShoppingBag,
+  Truck,
+  WarningCircle,
+} from '@phosphor-icons/react';
 import toast from 'react-hot-toast';
+import { productApi, type ProductDetail } from '../api/productApi';
+import { useAuth } from '../auth/useAuth';
+import ProductImage from '../components/ProductImage';
+import { useCartStore } from '../store/cartStore';
+import { getApiErrorMessage } from '../utils/apiError';
 import { INSUFFICIENT_STOCK_WARNING, isInsufficientStockError } from '../utils/cartErrorMessages';
 
 export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const productId = Number(id);
   const [product, setProduct] = useState<ProductDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [qty, setQty] = useState(1);
   const [adding, setAdding] = useState(false);
   const { addItem, updateItemQuantity, removeItem } = useCartStore();
-  const cartItem = useCartStore((state) => state.items.find((item) => item.productId === Number(id)));
+  const cartItem = useCartStore((state) => state.items.find((item) => item.productId === productId));
   const { isAuthenticated, roles } = useAuth();
   const isCustomer = roles.includes('CUSTOMER');
   const showCartActions = !isAuthenticated || isCustomer;
-  const navigate = useNavigate();
+
+  const loadProduct = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    setProduct(null);
+    if (!Number.isInteger(productId) || productId < 1) {
+      setLoadError('Đường dẫn sản phẩm không hợp lệ.');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const response = await productApi.detail(productId);
+      setProduct(response.data.data);
+    } catch (requestError) {
+      setLoadError(getApiErrorMessage(requestError, 'Không thể tải thông tin sản phẩm.'));
+    } finally {
+      setLoading(false);
+    }
+  }, [productId]);
 
   useEffect(() => {
-    productApi.detail(Number(id))
-      .then(res => setProduct(res.data.data))
-      .catch(() => navigate('/products'))
-      .finally(() => setLoading(false));
-  }, [id]);
+    void loadProduct();
+  }, [loadProduct]);
 
   useEffect(() => {
     setQty(cartItem?.quantity ?? 1);
@@ -32,8 +62,8 @@ export default function ProductDetailPage() {
 
   const displayedQty = cartItem?.quantity ?? qty;
 
-  const showCartError = (err: unknown) => {
-    if (isInsufficientStockError(err)) {
+  const showCartError = (error: unknown) => {
+    if (isInsufficientStockError(error)) {
       toast.error(INSUFFICIENT_STOCK_WARNING);
       return true;
     }
@@ -41,129 +71,157 @@ export default function ProductDetailPage() {
   };
 
   const handleAdd = async () => {
-    if (!isAuthenticated) { toast.error('Vui lòng đăng nhập'); return; }
-    if (!isCustomer) { return; }
+    if (!isAuthenticated) {
+      toast.error('Vui lòng đăng nhập');
+      return;
+    }
+    if (!isCustomer || !product) return;
+
     setAdding(true);
     try {
-      if (cartItem) {
-        await updateItemQuantity(cartItem.cartItemId, displayedQty);
-      } else {
-        await addItem(product!.id, displayedQty);
-      }
-      toast.success(`Đã thêm ${displayedQty} sản phẩm vào giỏ! 🛍️`);
-    } catch (err) {
-      showCartError(err);
-    } finally { setAdding(false); }
+      if (cartItem) await updateItemQuantity(cartItem.cartItemId, displayedQty);
+      else await addItem(product.id, displayedQty);
+      toast.success(cartItem ? 'Đã cập nhật giỏ hàng.' : `Đã thêm ${displayedQty} sản phẩm vào giỏ hàng.`);
+    } catch (error) {
+      showCartError(error);
+    } finally {
+      setAdding(false);
+    }
   };
 
   const handleDecrease = async () => {
     if (cartItem) {
-      if (cartItem.quantity <= 1) {
-        await removeItem(cartItem.cartItemId);
-      } else {
-        await updateItemQuantity(cartItem.cartItemId, cartItem.quantity - 1);
-      }
+      if (cartItem.quantity <= 1) await removeItem(cartItem.cartItemId);
+      else await updateItemQuantity(cartItem.cartItemId, cartItem.quantity - 1);
       return;
     }
-
-    setQty(q => Math.max(1, q - 1));
+    setQty((current) => Math.max(1, current - 1));
   };
 
   const handleIncrease = async () => {
     if (!product) return;
-
     if (cartItem) {
       try {
         await updateItemQuantity(cartItem.cartItemId, Math.min(product.inventoryCount, cartItem.quantity + 1));
-      } catch (err) {
-        showCartError(err);
+      } catch (error) {
+        showCartError(error);
       }
       return;
     }
-
-    setQty(q => Math.min(product.inventoryCount, q + 1));
+    setQty((current) => Math.min(product.inventoryCount, current + 1));
   };
 
-  if (loading) return (
-    <div className="page"><div className="container">
-      <div className="card pulse" style={{ height: 400 }} />
-    </div></div>
-  );
-  if (!product) return null;
+  if (loading) {
+    return (
+      <main className="page product-detail-page">
+        <div className="container product-detail-container">
+          <div className="product-detail-skeleton" aria-label="Đang tải sản phẩm" aria-busy="true">
+            <div className="skeleton-media pulse" />
+            <div className="skeleton-copy">
+              <span className="skeleton-line skeleton-line-short pulse" />
+              <span className="skeleton-line skeleton-line-title pulse" />
+              <span className="skeleton-line pulse" />
+              <span className="skeleton-line pulse" />
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (!product) {
+    return (
+      <main className="page product-detail-page">
+        <div className="container narrow-container">
+          <section className="state-card product-detail-error">
+            <span className="catalog-state-icon" aria-hidden="true"><WarningCircle size={34} weight="duotone" /></span>
+            <div><h1>Chưa thể mở sản phẩm</h1><p role="alert">{loadError}</p></div>
+            <div className="button-row">
+              <button className="btn btn-primary" type="button" onClick={() => void loadProduct()}>Thử lại</button>
+              <Link className="btn btn-ghost" to="/products">Về danh sách sản phẩm</Link>
+            </div>
+          </section>
+        </div>
+      </main>
+    );
+  }
 
   const isOutOfStock = product.inventoryCount === 0;
 
   return (
-    <div className="page">
-      <div className="container">
-        <button className="btn btn-ghost btn-sm" onClick={() => navigate(-1)} style={{ marginBottom: 24 }}>← Quay lại</button>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 40, alignItems: 'start' }}>
-          {/* Image */}
-          <div className="card" style={{ aspectRatio: '1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '6rem', background: 'linear-gradient(135deg,rgba(99,102,241,0.08),rgba(139,92,246,0.04))' }}>
-            {product.imageUrl
-              ? <img src={product.imageUrl} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 16 }} />
-              : <span>🛒</span>
-            }
-          </div>
+    <main className="page product-detail-page">
+      <div className="container product-detail-container">
+        <nav className="breadcrumb" aria-label="Đường dẫn">
+          <Link to="/products">Sản phẩm</Link><span aria-hidden="true">/</span><span>{product.categoryName}</span>
+        </nav>
+        <button className="back-button" type="button" onClick={() => navigate(-1)}>
+          <ArrowLeft size={18} weight="bold" aria-hidden="true" /> Quay lại
+        </button>
 
-          {/* Info */}
-          <div className="card card-p fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            <div>
-              <p style={{ color: 'var(--accent)', fontSize: '0.875rem', fontWeight: 600, marginBottom: 8 }}>{product.categoryName}</p>
-              <h1 style={{ fontSize: '1.5rem', fontWeight: 800 }}>{product.name}</h1>
-            </div>
-            
-            {/* Pricing Details */}
-            <div style={{ padding: '16px', background: 'rgba(99, 102, 241, 0.05)', borderRadius: '12px', border: '1px solid rgba(99, 102, 241, 0.1)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', color: 'var(--text-secondary)' }}>
-                <span>Đơn giá (chưa VAT):</span>
-                <span>{product.price.toLocaleString('vi-VN')}₫</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', color: 'var(--text-secondary)' }}>
-                <span>Thuế VAT ({product.vatRate}%):</span>
-                <span>{product.vatAmount.toLocaleString('vi-VN')}₫</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px', paddingTop: '12px', borderTop: '1px dashed rgba(99, 102, 241, 0.2)' }}>
-                <span style={{ fontWeight: 600 }}>Giá đã bao gồm VAT:</span>
-                <span style={{ fontSize: '1.75rem', fontWeight: 800, background: 'linear-gradient(135deg,#6366f1,#a78bfa)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                  {product.priceIncludingVat.toLocaleString('vi-VN')}₫
-                </span>
-              </div>
+        <div className="product-detail-layout">
+          <section className="product-detail-gallery" aria-label={`Hình ảnh ${product.name}`}>
+            <figure className="product-detail-media">
+              <ProductImage src={product.imageUrl} alt={product.name} loading="eager" />
+            </figure>
+            <p>Ảnh sản phẩm được cung cấp trong danh mục ShopOnline.</p>
+          </section>
+
+          <article className="product-detail-panel">
+            <header className="product-detail-heading">
+              <p className="product-detail-category">{product.categoryName}</p>
+              <h1>{product.name}</h1>
+              <p className={`product-availability ${isOutOfStock ? 'out' : product.inventoryCount < 10 ? 'low' : ''}`}>
+                {isOutOfStock ? 'Tạm hết hàng' : `Còn ${product.inventoryCount} sản phẩm`}
+              </p>
+            </header>
+
+            <div className="product-price-lead">
+              <span>Giá đã bao gồm VAT</span>
+              <strong>{product.priceIncludingVat.toLocaleString('vi-VN')}₫</strong>
             </div>
 
-            <p style={{ color: product.inventoryCount < 10 ? 'var(--warning)' : 'var(--text-secondary)', fontSize: '0.9rem' }}>
-              {isOutOfStock ? '❌ Hết hàng' : `✅ Còn ${product.inventoryCount} sản phẩm`}
-            </p>
+            <dl className="product-pricing">
+              <div><dt>Giá trước VAT</dt><dd>{product.price.toLocaleString('vi-VN')}₫</dd></div>
+              <div><dt>VAT {product.vatRate}%</dt><dd>{product.vatAmount.toLocaleString('vi-VN')}₫</dd></div>
+            </dl>
 
-            {/* Description */}
             {product.description && (
-              <div 
-                style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', lineHeight: 1.6, marginTop: 16 }}
-                dangerouslySetInnerHTML={{ __html: product.description }} 
-              />
+              <section className="product-description-section" aria-labelledby="product-description-title">
+                <h2 id="product-description-title">Thông tin sản phẩm</h2>
+                <div className="product-description" dangerouslySetInnerHTML={{ __html: product.description }} />
+              </section>
             )}
 
-            {/* Quantity */}
-            {showCartActions && !isOutOfStock && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Số lượng:</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 0, background: 'var(--bg-card)', borderRadius: 8, border: '1px solid var(--border)' }}>
-                  <button className="btn btn-ghost btn-sm" onClick={handleDecrease} style={{ border: 'none' }}>−</button>
-                  <span aria-label={`Số lượng trong giỏ của ${product.name}`} style={{ padding: '0 16px', fontWeight: 700 }}>{displayedQty}</span>
-                  <button className="btn btn-ghost btn-sm" onClick={handleIncrease} style={{ border: 'none' }}>+</button>
-                </div>
-              </div>
-            )}
+            <ul className="product-service-notes">
+              <li><Truck size={20} aria-hidden="true" /><span><strong>Phí giao hàng theo địa chỉ</strong><small>Chọn địa chỉ và phương thức ở bước giao hàng.</small></span></li>
+              <li><CheckCircle size={20} aria-hidden="true" /><span><strong>Kiểm tra tồn kho khi thêm</strong><small>Số lượng khả dụng được xác nhận bởi giỏ hàng.</small></span></li>
+            </ul>
 
             {showCartActions && (
-              <button className={`btn btn-lg btn-full ${isOutOfStock ? 'btn-ghost' : 'btn-primary'}`}
-                onClick={handleAdd} disabled={isOutOfStock || adding}>
-                {adding ? <><span className="spinner" style={{ width: 18, height: 18 }} /> Đang thêm...</> : isOutOfStock ? 'Hết hàng' : `🛍️ Thêm vào giỏ — ${(product.priceIncludingVat * displayedQty).toLocaleString('vi-VN')}₫`}
-              </button>
+              <section className="product-buy-box" aria-label="Thêm sản phẩm vào giỏ">
+                {!isOutOfStock && (
+                  <div className="product-purchase-row">
+                    <span className="quantity-label">Số lượng</span>
+                    <div className="quantity-control product-detail-quantity">
+                      <button type="button" aria-label="−" disabled={adding} onClick={() => void handleDecrease()}><Minus size={16} weight="bold" aria-hidden="true" /></button>
+                      <strong aria-live="polite" aria-label={`Số lượng trong giỏ của ${product.name}`}>{displayedQty}</strong>
+                      <button type="button" aria-label="+" disabled={adding || displayedQty >= product.inventoryCount} onClick={() => void handleIncrease()}><Plus size={16} weight="bold" aria-hidden="true" /></button>
+                    </div>
+                  </div>
+                )}
+                <button
+                  className={`btn btn-lg btn-full ${isOutOfStock ? 'btn-ghost' : 'btn-primary'}`}
+                  type="button"
+                  onClick={() => void handleAdd()}
+                  disabled={isOutOfStock || adding}
+                >
+                  {adding ? <><span className="spinner spinner-inline" /> Đang cập nhật...</> : isOutOfStock ? 'Tạm hết hàng' : <><ShoppingBag size={20} weight="bold" aria-hidden="true" /> {cartItem ? 'Cập nhật giỏ hàng' : 'Thêm vào giỏ'} · {(product.priceIncludingVat * displayedQty).toLocaleString('vi-VN')}₫</>}
+                </button>
+              </section>
             )}
-          </div>
+          </article>
         </div>
       </div>
-    </div>
+    </main>
   );
 }

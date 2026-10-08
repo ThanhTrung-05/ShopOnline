@@ -26,4 +26,5 @@ export interface Product {
   categoryName: string;
   inventoryCount: number;
   status: string;
+  featured: boolean;
 }

@@ -39,6 +39,8 @@ import java.util.Set;
 @Transactional(readOnly = true)
 public class ProductServiceImpl implements ProductService {
 
+    private static final int FEATURED_PRODUCT_LIMIT = 8;
+
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
     private final InventoryRepository inventoryRepository;
@@ -81,6 +83,42 @@ public class ProductServiceImpl implements ProductService {
             final String json = objectMapper.writeValueAsString(
                     Map.of("content", result.getContent(), "total", result.getTotalElements()));
             redisTemplate.opsForValue().set(cacheKey, json, Duration.ofSeconds(ttl));
+        } catch (final Exception e) {
+            log.warn("Cache write error for key {}: {}", cacheKey, e.getMessage());
+        }
+
+        return result;
+    }
+
+    @Override
+    public List<ProductResponse> findFeatured() {
+        final String cacheKey = CacheKeys.FEATURED_PRODUCTS;
+        final int ttl = appProperties.getRedis().getTtl().getFeaturedProducts();
+
+        try {
+            final String cached = redisTemplate.opsForValue().get(cacheKey);
+            if (cached != null) {
+                log.debug("Cache HIT: {}", cacheKey);
+                final List<ProductResponse> cachedProducts = objectMapper.readValue(
+                        cached, new TypeReference<List<ProductResponse>>() {});
+                return cachedProducts.stream().limit(FEATURED_PRODUCT_LIMIT).toList();
+            }
+        } catch (final Exception e) {
+            log.warn("Cache read error for key {}: {}", cacheKey, e.getMessage());
+        }
+
+        final List<ProductResponse> result = productRepository
+                .findFeaturedProducts(PageRequest.of(0, FEATURED_PRODUCT_LIMIT))
+                .stream()
+                .limit(FEATURED_PRODUCT_LIMIT)
+                .map(this::toResponse)
+                .toList();
+
+        try {
+            redisTemplate.opsForValue().set(
+                    cacheKey,
+                    objectMapper.writeValueAsString(result),
+                    Duration.ofSeconds(ttl));
         } catch (final Exception e) {
             log.warn("Cache write error for key {}: {}", cacheKey, e.getMessage());
         }
@@ -178,6 +216,7 @@ public class ProductServiceImpl implements ProductService {
                 .price(request.price())
                 .imageUrl(request.imageUrl())
                 .status(Product.ProductStatus.valueOf(request.status()))
+                .featured(request.featured())
                 .build();
         final Product saved = productRepository.save(product);
 
@@ -213,6 +252,7 @@ public class ProductServiceImpl implements ProductService {
         product.setPrice(request.price());
         product.setImageUrl(request.imageUrl());
         product.setStatus(Product.ProductStatus.valueOf(request.status()));
+        product.setFeatured(request.featured());
 
         if (product.getInventory() != null) {
             product.getInventory().setQuantity(request.initialQuantity());
@@ -270,6 +310,7 @@ public class ProductServiceImpl implements ProductService {
 
     /** Evict all cached product list pages after a product is created/updated/deleted. */
     private void evictListCache() {
+        redisTemplate.delete(CacheKeys.FEATURED_PRODUCTS);
         final Set<String> keys = redisTemplate.keys("product:list:*");
         if (keys != null && !keys.isEmpty()) {
             redisTemplate.delete(keys);
@@ -288,7 +329,8 @@ public class ProductServiceImpl implements ProductService {
                 p.getCategory().getCategoryId(),
                 p.getCategory().getCategoryName(),
                 p.getInventory() != null ? p.getInventory().getAvailableQuantity() : 0,
-                p.getStatus().name()
+                p.getStatus().name(),
+                p.isFeatured()
         );
     }
 
@@ -319,7 +361,8 @@ public class ProductServiceImpl implements ProductService {
                 p.getCategory().getCategoryId(),
                 p.getCategory().getCategoryName(),
                 p.getInventory() != null ? p.getInventory().getAvailableQuantity() : 0,
-                p.getStatus().name()
+                p.getStatus().name(),
+                p.isFeatured()
         );
     }
 }
