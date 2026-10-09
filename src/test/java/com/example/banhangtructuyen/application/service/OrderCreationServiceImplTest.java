@@ -18,6 +18,10 @@ import com.example.banhangtructuyen.domain.repository.CartItemRepository;
 import com.example.banhangtructuyen.domain.repository.CartRepository;
 import com.example.banhangtructuyen.domain.repository.OrderItemRepository;
 import com.example.banhangtructuyen.domain.repository.OrderRepository;
+import com.example.banhangtructuyen.domain.repository.InventoryRepository;
+import com.example.banhangtructuyen.application.service.ProductService;
+import com.example.banhangtructuyen.application.service.OutboxEventPublisher;
+import com.example.banhangtructuyen.domain.model.Inventory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -61,6 +65,9 @@ class OrderCreationServiceImplTest {
     @Mock private ShippingPreparationService shippingPreparationService;
     @Mock private OrderRepository orderRepository;
     @Mock private OrderItemRepository orderItemRepository;
+    @Mock private InventoryRepository inventoryRepository;
+    @Mock private ProductService productService;
+    @Mock private OutboxEventPublisher outboxEventPublisher;
 
     private OrderCreationService service;
 
@@ -72,7 +79,10 @@ class OrderCreationServiceImplTest {
                 cartItemRepository,
                 shippingPreparationService,
                 orderRepository,
-                orderItemRepository);
+                orderItemRepository,
+                inventoryRepository,
+                productService,
+                outboxEventPublisher);
     }
 
     @Test
@@ -89,6 +99,11 @@ class OrderCreationServiceImplTest {
             order.setUpdatedAt(CREATED_AT);
             return order;
         });
+        
+        when(inventoryRepository.findByProductIdWithLock(101L))
+                .thenReturn(Optional.of(Inventory.builder().inventoryId(1L).quantity(10).reservedQuantity(0).build()));
+        when(inventoryRepository.findByProductIdWithLock(102L))
+                .thenReturn(Optional.of(Inventory.builder().inventoryId(2L).quantity(10).reservedQuantity(0).build()));
 
         final CreateOrderResponse response = service.createOrder(SUBJECT, REQUEST);
 
@@ -211,6 +226,12 @@ class OrderCreationServiceImplTest {
         stubCart(cartItems);
         when(shippingPreparationService.prepareShipping(SUBJECT, REQUEST))
                 .thenReturn(sampleShipping(CUSTOMER_ID));
+                
+        when(inventoryRepository.findByProductIdWithLock(101L))
+                .thenReturn(Optional.of(Inventory.builder().inventoryId(1L).quantity(10).reservedQuantity(0).build()));
+        when(inventoryRepository.findByProductIdWithLock(102L))
+                .thenReturn(Optional.of(Inventory.builder().inventoryId(2L).quantity(10).reservedQuantity(0).build()));
+
         when(orderRepository.saveAndFlush(any(Order.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         when(orderItemRepository.saveAll(anyList()))

@@ -1,6 +1,6 @@
 package com.example.banhangtructuyen.domain.repository;
 
-import com.example.banhangtructuyen.domain.model.Inventory;
+import com.example.banhangtructuyen.domain.model.Payment;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -9,9 +9,9 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
 
-public interface InventoryRepository extends JpaRepository<Inventory, Long> {
+public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT i FROM Inventory i WHERE i.product.productId = :productId")
-    Optional<Inventory> findByProductIdWithLock(@Param("productId") Long productId);
+    @Query("SELECT p FROM Payment p WHERE p.order.orderNumber = :orderNumber")
+    Optional<Payment> findByOrderNumberForUpdate(@Param("orderNumber") String orderNumber);
 }

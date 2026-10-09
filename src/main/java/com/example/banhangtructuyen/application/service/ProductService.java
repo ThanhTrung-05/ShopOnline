@@ -39,4 +39,7 @@ public interface ProductService {
 
     /** Soft-deletes a product by flipping its status to DELETED (ATS-6). */
     void delete(Long productId);
+
+    /** Evict product cache and list cache after inventory updates (ATS-17). */
+    void clearProductCaches(Long productId);
 }
