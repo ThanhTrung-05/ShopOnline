@@ -11,12 +11,17 @@ import com.example.banhangtructuyen.domain.model.Customer;
 import com.example.banhangtructuyen.domain.model.Order;
 import com.example.banhangtructuyen.domain.model.OrderItem;
 import com.example.banhangtructuyen.domain.model.OrderStatus;
+import com.example.banhangtructuyen.domain.model.Inventory;
 import com.example.banhangtructuyen.domain.repository.CartItemRepository;
 import com.example.banhangtructuyen.domain.repository.CartRepository;
+import com.example.banhangtructuyen.domain.repository.InventoryRepository;
 import com.example.banhangtructuyen.domain.repository.OrderItemRepository;
 import com.example.banhangtructuyen.domain.repository.OrderRepository;
+import com.example.banhangtructuyen.application.service.ProductService;
+import com.example.banhangtructuyen.application.service.OutboxEventPublisher;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -31,7 +36,7 @@ import java.util.stream.Stream;
 
 @Service
 @RequiredArgsConstructor
-@Transactional
+@Transactional(isolation = Isolation.SERIALIZABLE)
 public class OrderCreationServiceImpl implements OrderCreationService {
 
     private static final int MAX_SHIPPING_ADDRESS_LENGTH = 500;
@@ -43,6 +48,9 @@ public class OrderCreationServiceImpl implements OrderCreationService {
     private final ShippingPreparationService shippingPreparationService;
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
+    private final InventoryRepository inventoryRepository;
+    private final ProductService productService;
+    private final OutboxEventPublisher outboxEventPublisher;
 
     @Override
     public CreateOrderResponse createOrder(
@@ -64,7 +72,15 @@ public class OrderCreationServiceImpl implements OrderCreationService {
         }
 
         final BigDecimal merchandiseTotal = cartItems.stream()
-                .map(OrderCreationServiceImpl::calculateSubtotal)
+                .map(cartItem -> {
+                    final Long productId = cartItem.getProduct().getProductId();
+                    final int qty = cartItem.getQuantity();
+                    final Inventory inventory = inventoryRepository.findByProductIdWithLock(productId)
+                            .orElseThrow(() -> new IllegalStateException("Inventory not found for product " + productId));
+                    inventory.reserve(qty);
+                    productService.clearProductCaches(productId);
+                    return calculateSubtotal(cartItem);
+                })
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         final BigDecimal totalAmount = merchandiseTotal.add(shipping.shippingFee());
 
@@ -83,6 +99,9 @@ public class OrderCreationServiceImpl implements OrderCreationService {
 
         cartItemRepository.deleteAll(cartItems);
         cartItemRepository.flush();
+
+        outboxEventPublisher.publishEvent("ORDER", order.getOrderNumber(), "banhang.order.created", 
+                java.util.Map.of("orderId", order.getOrderId(), "orderNumber", order.getOrderNumber()));
 
         return new CreateOrderResponse(
                 order.getOrderNumber(),

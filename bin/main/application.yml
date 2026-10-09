@@ -1,0 +1,49 @@
+spring:
+  application:
+    name: banhangtructuyen
+  jackson:
+    time-zone: Asia/Ho_Chi_Minh
+  jpa:
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+
+app:
+  redis:
+    ttl:
+      product-list: 300
+      product-detail: 600
+  shipping:
+    fees:
+      LOCAL:
+        STANDARD: ${SHIPPING_FEE_LOCAL_STANDARD:10000}
+        EXPRESS: ${SHIPPING_FEE_LOCAL_EXPRESS:25000}
+      NEARBY:
+        STANDARD: ${SHIPPING_FEE_NEARBY_STANDARD:20000}
+        EXPRESS: ${SHIPPING_FEE_NEARBY_EXPRESS:40000}
+      OTHER:
+        STANDARD: ${SHIPPING_FEE_OTHER_STANDARD:30000}
+  security:
+    jwt:
+      jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://localhost:8081/realms/shoponline/protocol/openid-connect/certs}
+      issuer: ${KEYCLOAK_ISSUER:http://localhost:8081/realms/shoponline}
+      audience: ${KEYCLOAK_AUDIENCE:shoponline-backend}
+    cors:
+      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  keycloak:
+    admin:
+      base-url: ${KEYCLOAK_ADMIN_BASE_URL:http://localhost:8081}
+      realm: ${KEYCLOAK_REALM:shoponline}
+      client-id: ${KEYCLOAK_USER_ADMIN_CLIENT_ID:shoponline-user-admin}
+      client-secret: ${KEYCLOAK_USER_ADMIN_CLIENT_SECRET:}
+      backend-client-id: ${KEYCLOAK_BACKEND_CLIENT_ID:shoponline-backend}
+      customer-role: ${KEYCLOAK_CUSTOMER_ROLE:CUSTOMER}
+      connect-timeout: ${KEYCLOAK_ADMIN_CONNECT_TIMEOUT:5s}
+      read-timeout: ${KEYCLOAK_ADMIN_READ_TIMEOUT:10s}
+
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html

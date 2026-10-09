@@ -1,0 +1,34 @@
+spring:
+  datasource:
+    url: ${ORACLE_URL}
+    username: ${ORACLE_USER}
+    password: ${ORACLE_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.OracleDialect
+        type:
+          preferred_instant_jdbc_type: TIMESTAMP
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+
+app:
+  security:
+    jwt:
+      jwk-set-uri: ${KEYCLOAK_JWK_SET_URI}
+      issuer: ${KEYCLOAK_ISSUER}
+      audience: ${KEYCLOAK_AUDIENCE:shoponline-backend}
+    cors:
+      allowed-origins: ${CORS_ALLOWED_ORIGINS}
+  keycloak:
+    admin:
+      base-url: ${KEYCLOAK_ADMIN_BASE_URL}
+      realm: ${KEYCLOAK_REALM}
+      client-id: ${KEYCLOAK_USER_ADMIN_CLIENT_ID}
+      client-secret: ${KEYCLOAK_USER_ADMIN_CLIENT_SECRET}
+      backend-client-id: ${KEYCLOAK_BACKEND_CLIENT_ID:shoponline-backend}
+      customer-role: ${KEYCLOAK_CUSTOMER_ROLE:CUSTOMER}

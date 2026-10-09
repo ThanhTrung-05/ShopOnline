@@ -317,6 +317,12 @@ public class ProductServiceImpl implements ProductService {
         }
     }
 
+    @Override
+    public void clearProductCaches(final Long productId) {
+        evictCache(productId);
+        evictListCache();
+    }
+
     /** Maps Product entity to lightweight ProductResponse (used by product list ATS-2). */
     private ProductResponse toResponse(final Product p) {
         return new ProductResponse(

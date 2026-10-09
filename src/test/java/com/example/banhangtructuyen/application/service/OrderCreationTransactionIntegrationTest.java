@@ -20,6 +20,9 @@ import com.example.banhangtructuyen.domain.repository.CustomerRepository;
 import com.example.banhangtructuyen.domain.repository.OrderItemRepository;
 import com.example.banhangtructuyen.domain.repository.OrderRepository;
 import com.example.banhangtructuyen.domain.repository.ProductRepository;
+import com.example.banhangtructuyen.domain.repository.InventoryRepository;
+import com.example.banhangtructuyen.domain.repository.OutboxEventRepository;
+import com.example.banhangtructuyen.domain.model.Inventory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,6 +31,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 
@@ -59,7 +63,10 @@ class OrderCreationTransactionIntegrationTest {
     @Autowired private CustomerRepository customerRepository;
     @Autowired private ProductRepository productRepository;
     @Autowired private CategoryRepository categoryRepository;
+    @Autowired private InventoryRepository inventoryRepository;
+    @Autowired private OutboxEventRepository outboxEventRepository;
     @MockBean private ShippingPreparationService shippingPreparationService;
+    @MockBean private StringRedisTemplate stringRedisTemplate;
 
     private Long customerId;
 
@@ -144,6 +151,11 @@ class OrderCreationTransactionIntegrationTest {
                 .price(new BigDecimal("15000.00"))
                 .status(Product.ProductStatus.ACTIVE)
                 .build());
+        inventoryRepository.saveAndFlush(Inventory.builder()
+                .product(product)
+                .quantity(100)
+                .reservedQuantity(0)
+                .build());
         final Customer customer = customerRepository.saveAndFlush(Customer.builder()
                 .email("checkout-transaction@example.com")
                 .fullName("Checkout Transaction Customer")
@@ -168,8 +180,10 @@ class OrderCreationTransactionIntegrationTest {
         orderRepository.deleteAllInBatch();
         cartItemRepository.deleteAllInBatch();
         cartRepository.deleteAllInBatch();
+        inventoryRepository.deleteAllInBatch();
         productRepository.deleteAllInBatch();
         categoryRepository.deleteAllInBatch();
         customerRepository.deleteAllInBatch();
+        outboxEventRepository.deleteAllInBatch();
     }
 }
