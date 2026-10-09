@@ -68,12 +68,6 @@ public class OrderStatusServiceImpl implements OrderStatusService {
     }
 
     private static OrderItemResponse toItemResponse(final OrderItem item) {
-        return new OrderItemResponse(
-                item.getProductId(),
-                item.getProductName(),
-                item.getUnitPrice(),
-                item.getQuantity(),
-                item.getSubtotal()
-        );
+        return OrderItemResponse.from(item);
     }
 }

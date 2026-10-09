@@ -22,7 +22,15 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 /**
- * Runtime mapping of the existing Oracle {@code ORDERS} table.
+ * Runtime mapping of the existing Oracle ORDERS table.
+ *
+ * <p>ATS-26 additions:
+ *   totalBeforeVat  = sum of all (unitPrice * quantity) line items
+ *   totalVatAmount  = sum of all vatAmount per line item
+ *   totalAmount     = totalBeforeVat + totalVatAmount + shippingFee
+ *
+ * <p>These fields are set at order-creation time and never updated,
+ * ensuring the invoice is immutable.
  */
 @Entity
 @Table(name = "ORDERS")
@@ -49,6 +57,15 @@ public class Order {
     @Column(name = "STATUS", nullable = false, length = 30)
     private OrderStatus status;
 
+    /** Merchandise subtotal before VAT = sum of (unitPrice * quantity). */
+    @Column(name = "TOTAL_BEFORE_VAT", nullable = false, precision = 19, scale = 2)
+    private BigDecimal totalBeforeVat;
+
+    /** Total VAT across all line items = sum of vatAmount. */
+    @Column(name = "TOTAL_VAT_AMOUNT", nullable = false, precision = 19, scale = 2)
+    private BigDecimal totalVatAmount;
+
+    /** Grand total = totalBeforeVat + totalVatAmount + shippingFee. */
     @Column(name = "TOTAL_AMOUNT", nullable = false, precision = 19, scale = 2)
     private BigDecimal totalAmount;
 

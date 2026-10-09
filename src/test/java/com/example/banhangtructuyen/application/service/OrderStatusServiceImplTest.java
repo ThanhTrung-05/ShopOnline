@@ -63,6 +63,8 @@ class OrderStatusServiceImplTest {
                         .unitPrice(new BigDecimal("1250000.00"))
                         .quantity(2)
                         .subtotal(new BigDecimal("2500000.00"))
+                        .vatRate(new BigDecimal("10.00"))
+                        .vatAmount(new BigDecimal("250000"))
                         .build(),
                 OrderItem.builder()
                         .orderItemId(102L)
@@ -72,6 +74,8 @@ class OrderStatusServiceImplTest {
                         .unitPrice(new BigDecimal("450000.00"))
                         .quantity(1)
                         .subtotal(new BigDecimal("450000.00"))
+                        .vatRate(new BigDecimal("10.00"))
+                        .vatAmount(new BigDecimal("45000"))
                         .build()
         );
         when(orderRepository.findByOrderNumberAndCustomerId(ORDER_NUMBER, CUSTOMER_ID))

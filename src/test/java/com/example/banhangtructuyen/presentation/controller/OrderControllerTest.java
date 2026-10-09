@@ -84,8 +84,10 @@ class OrderControllerTest {
                 .thenReturn(new CreateOrderResponse(
                         "ORD-20260907-ABCDEF12",
                         OrderStatus.PENDING,
-                        new BigDecimal("49000.00"),
-                        new BigDecimal("10000.00"),
+                        new BigDecimal("39000.00"),   // totalBeforeVat
+                        new BigDecimal("3900.00"),    // totalVatAmount
+                        new BigDecimal("10000.00"),   // shippingFee
+                        new BigDecimal("52900.00"),   // totalAmount
                         CREATED_AT));
 
         mockMvc.perform(post(LIST_PATH)
@@ -107,7 +109,9 @@ class OrderControllerTest {
                 .andExpect(jsonPath("$.data.orderNumber")
                         .value("ORD-20260907-ABCDEF12"))
                 .andExpect(jsonPath("$.data.status").value("PENDING"))
-                .andExpect(jsonPath("$.data.totalAmount").value(49000.00))
+                .andExpect(jsonPath("$.data.totalBeforeVat").value(39000.00))
+                .andExpect(jsonPath("$.data.totalVatAmount").value(3900.00))
+                .andExpect(jsonPath("$.data.totalAmount").value(52900.00))
                 .andExpect(jsonPath("$.data.shippingFee").value(10000.00))
                 .andExpect(jsonPath("$.data.createdAt").value("2026-08-27T03:00:00Z"))
                 .andExpect(jsonPath("$.data.customerId").doesNotExist())
@@ -414,13 +418,19 @@ class OrderControllerTest {
                                 "Mechanical Keyboard",
                                 new BigDecimal("1250000.00"),
                                 2,
-                                new BigDecimal("2500000.00")),
+                                new BigDecimal("2500000.00"),
+                                new BigDecimal("10.00"),
+                                new BigDecimal("250000"),
+                                new BigDecimal("2750000.00")),
                         new OrderItemResponse(
                                 502L,
                                 "Wireless Mouse",
                                 new BigDecimal("450000.00"),
                                 1,
-                                new BigDecimal("450000.00"))
+                                new BigDecimal("450000.00"),
+                                new BigDecimal("10.00"),
+                                new BigDecimal("45000"),
+                                new BigDecimal("495000.00"))
                 )
         );
     }

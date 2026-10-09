@@ -116,6 +116,8 @@ class OrderNotificationTransactionIntegrationTest {
                 .customerId(customer.getCustomerId())
                 .orderNumber("ORD-ATS36-" + suffix.toUpperCase())
                 .status(OrderStatus.PENDING)
+                .totalBeforeVat(new BigDecimal("115000.00"))
+                .totalVatAmount(new BigDecimal("10000.00"))
                 .totalAmount(new BigDecimal("125000.00"))
                 .shippingAddress("Shipping address snapshot")
                 .build());

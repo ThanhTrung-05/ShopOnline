@@ -185,6 +185,8 @@ class OrderRepositoryTest {
                 .orderNumber(orderNumber)
                 .customerId(customerId)
                 .status(status)
+                .totalBeforeVat(new BigDecimal("115000.00"))
+                .totalVatAmount(new BigDecimal("10000.00"))
                 .totalAmount(new BigDecimal("125000.00"))
                 .shippingAddress("123 Le Loi, District 1, Ho Chi Minh City")
                 .build();

@@ -17,7 +17,8 @@ public interface CartItemRepository extends JpaRepository<CartItem, Long> {
     @Query("""
             select ci
             from CartItem ci
-            join fetch ci.product
+            join fetch ci.product p
+            join fetch p.category
             where ci.cart.customerId = :customerId
             order by ci.cartItemId asc
             """)

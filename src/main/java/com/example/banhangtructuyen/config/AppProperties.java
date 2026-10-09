@@ -26,4 +26,13 @@ public class AppProperties {
         private int productDetail = 600;
         private int featuredProducts = 300;
     }
+
+    private Inventory inventory = new Inventory();
+
+    @Getter
+    @Setter
+    public static class Inventory {
+        /** ATS-18: products with availableQty <= this value are flagged as LOW_STOCK. Default 10. */
+        private int lowStockThreshold = 10;
+    }
 }
