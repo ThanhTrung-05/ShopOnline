@@ -60,6 +60,8 @@ class OrderItemRepositoryTest {
                 .customerId(customer.getCustomerId())
                 .orderNumber("ORD-20260907-ITEMMAPPING")
                 .status(OrderStatus.PENDING)
+                .totalBeforeVat(new BigDecimal("36000.00"))
+                .totalVatAmount(new BigDecimal("4000.00"))
                 .totalAmount(new BigDecimal("40000.00"))
                 .shippingAddress("Snapshot address")
                 .build());
@@ -71,6 +73,8 @@ class OrderItemRepositoryTest {
                 .unitPrice(new BigDecimal("12000.00"))
                 .quantity(2)
                 .subtotal(new BigDecimal("24000.00"))
+                .vatRate(new BigDecimal("10.00"))
+                .vatAmount(new BigDecimal("2400.00"))
                 .build());
         entityManager.clear();
 

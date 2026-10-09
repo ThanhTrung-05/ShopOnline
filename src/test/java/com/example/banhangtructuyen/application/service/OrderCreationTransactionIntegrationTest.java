@@ -105,12 +105,18 @@ class OrderCreationTransactionIntegrationTest {
         assertThat(order.getCustomerId()).isEqualTo(customerId);
         assertThat(order.getShippingAddress()).isEqualTo(
                 "Nguyen Van A, 0987654321, 123 Le Loi, Ben Nghe, District 1, Ha Noi");
-        assertThat(order.getTotalAmount()).isEqualByComparingTo("34000.00");
+        // ATS-26: subtotal=24000, vat10%=2400, shipping=10000, total=36400
+        assertThat(order.getTotalBeforeVat()).isEqualByComparingTo("24000.00");
+        assertThat(order.getTotalVatAmount()).isEqualByComparingTo("2400");
+        assertThat(order.getTotalAmount()).isEqualByComparingTo("36400");
         assertThat(orderItems).singleElement().satisfies(item -> {
             assertThat(item.getProductName()).isEqualTo("Checkout product");
             assertThat(item.getUnitPrice()).isEqualByComparingTo("12000.00");
             assertThat(item.getQuantity()).isEqualTo(2);
             assertThat(item.getSubtotal()).isEqualByComparingTo("24000.00");
+            // ATS-26: per-line VAT snapshot
+            assertThat(item.getVatRate()).isEqualByComparingTo("10.00");
+            assertThat(item.getVatAmount()).isEqualByComparingTo("2400");
         });
         assertThat(cartRepository.findByCustomerId(customerId)).isPresent();
         assertThat(cartItemRepository.findViewItemsByCustomerId(customerId)).isEmpty();

@@ -17,6 +17,16 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 
+/**
+ * ATS-26: ORDER_ITEMS entity updated to persist VAT breakdown at order time.
+ * vatRate and vatAmount are captured from Category.vatRate at the moment of order creation.
+ * This ensures historical invoices remain accurate even if VAT rates change later.
+ *
+ * <p>Calculation (ATS-26):
+ *   subtotal    = unitPrice * quantity                 (merchandise subtotal before VAT)
+ *   vatAmount   = subtotal * vatRate / 100             (rounded HALF_UP, 0 decimal places)
+ *   totalWithVat = subtotal + vatAmount
+ */
 @Entity
 @Table(name = "ORDER_ITEMS")
 @Getter
@@ -44,9 +54,19 @@ public class OrderItem {
     @Column(name = "QUANTITY", nullable = false, updatable = false)
     private Integer quantity;
 
+    /** Unit price BEFORE VAT, captured from Product.price at order time. */
     @Column(name = "UNIT_PRICE", nullable = false, updatable = false, precision = 19, scale = 2)
     private BigDecimal unitPrice;
 
+    /** Subtotal before VAT = unitPrice * quantity. */
     @Column(name = "SUBTOTAL", nullable = false, updatable = false, precision = 19, scale = 2)
     private BigDecimal subtotal;
+
+    /** VAT rate (%) captured from Category.vatRate at order time. E.g. 5.00 or 10.00. */
+    @Column(name = "VAT_RATE", nullable = false, updatable = false, precision = 5, scale = 2)
+    private BigDecimal vatRate;
+
+    /** VAT amount = subtotal * vatRate / 100, rounded HALF_UP to 0 decimal places. */
+    @Column(name = "VAT_AMOUNT", nullable = false, updatable = false, precision = 19, scale = 2)
+    private BigDecimal vatAmount;
 }

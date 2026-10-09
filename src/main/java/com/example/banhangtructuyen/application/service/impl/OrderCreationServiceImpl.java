@@ -8,10 +8,10 @@ import com.example.banhangtructuyen.application.service.OrderCreationService;
 import com.example.banhangtructuyen.application.service.ShippingPreparationService;
 import com.example.banhangtructuyen.domain.model.CartItem;
 import com.example.banhangtructuyen.domain.model.Customer;
+import com.example.banhangtructuyen.domain.model.Inventory;
 import com.example.banhangtructuyen.domain.model.Order;
 import com.example.banhangtructuyen.domain.model.OrderItem;
 import com.example.banhangtructuyen.domain.model.OrderStatus;
-import com.example.banhangtructuyen.domain.model.Inventory;
 import com.example.banhangtructuyen.domain.repository.CartItemRepository;
 import com.example.banhangtructuyen.domain.repository.CartRepository;
 import com.example.banhangtructuyen.domain.repository.InventoryRepository;
@@ -25,15 +25,33 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Stream;
 
+/**
+ * ATS-15 + ATS-16 + ATS-26: Creates an order from the active cart.
+ *
+ * <p>ATS-26 changes: VAT is calculated per line item at order creation time
+ * using the product's category VAT rate. The rate and amount are persisted in
+ * ORDER_ITEMS so invoices remain historically accurate even if VAT rates change.
+ *
+ * <p>VAT calculation (price stored BEFORE VAT):
+ *   subtotal     = unitPrice * quantity
+ *   vatAmount    = subtotal * vatRate / 100  (rounded HALF_UP, 0 decimal places)
+ *   totalWithVat = subtotal + vatAmount
+ *
+ * <p>totalBeforeVat = sum(subtotal across all items)
+ * <p>totalVatAmount = sum(vatAmount across all items)
+ * <p>totalAmount    = totalBeforeVat + totalVatAmount + shippingFee
+ */
 @Service
 @RequiredArgsConstructor
 @Transactional(isolation = Isolation.SERIALIZABLE)
@@ -56,6 +74,7 @@ public class OrderCreationServiceImpl implements OrderCreationService {
     public CreateOrderResponse createOrder(
             final String keycloakSubject,
             final ShippingSelectionRequest shippingSelection) {
+
         final Customer customer = authenticatedCustomerResolver.resolveActiveCustomer(keycloakSubject);
         cartRepository.findByCustomerIdForUpdate(customer.getCustomerId())
                 .orElseThrow(() -> new IllegalArgumentException(EMPTY_CART_MESSAGE));
@@ -71,27 +90,44 @@ public class OrderCreationServiceImpl implements OrderCreationService {
             throw new IllegalStateException("Validated shipping customer does not match authenticated customer");
         }
 
-        final BigDecimal merchandiseTotal = cartItems.stream()
-                .map(cartItem -> {
-                    final Long productId = cartItem.getProduct().getProductId();
-                    final int qty = cartItem.getQuantity();
-                    final Inventory inventory = inventoryRepository.findByProductIdWithLock(productId)
-                            .orElseThrow(() -> new IllegalStateException("Inventory not found for product " + productId));
-                    inventory.reserve(qty);
-                    productService.clearProductCaches(productId);
-                    return calculateSubtotal(cartItem);
-                })
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        final BigDecimal totalAmount = merchandiseTotal.add(shipping.shippingFee());
+        // --- Reserve inventory (ATS-15/ATS-17) and compute per-line VAT (ATS-26) ---
+        BigDecimal totalBeforeVat = BigDecimal.ZERO;
+        BigDecimal totalVatAmount = BigDecimal.ZERO;
 
+        for (final CartItem cartItem : cartItems) {
+            final Long productId = cartItem.getProduct().getProductId();
+            final int qty = cartItem.getQuantity();
+
+            // ATS-15/ATS-16: pessimistic lock + reserve
+            final Inventory inventory = inventoryRepository.findByProductIdWithLock(productId)
+                    .orElseThrow(() -> new IllegalStateException("Inventory not found for product " + productId));
+            inventory.reserve(qty);
+            productService.clearProductCaches(productId);
+
+            // ATS-26: accumulate VAT totals
+            final BigDecimal subtotal = cartItem.getUnitPrice()
+                    .multiply(BigDecimal.valueOf(qty));
+            final BigDecimal vatAmount = computeVatAmount(cartItem, subtotal);
+            totalBeforeVat = totalBeforeVat.add(subtotal);
+            totalVatAmount = totalVatAmount.add(vatAmount);
+        }
+
+        final BigDecimal totalAmount = totalBeforeVat
+                .add(totalVatAmount)
+                .add(shipping.shippingFee());
+
+        // Save Order with VAT breakdown
         final Order order = orderRepository.saveAndFlush(Order.builder()
                 .customerId(customer.getCustomerId())
                 .orderNumber(generateOrderNumber())
                 .status(OrderStatus.PENDING)
+                .totalBeforeVat(totalBeforeVat)
+                .totalVatAmount(totalVatAmount)
                 .totalAmount(totalAmount)
                 .shippingAddress(createShippingAddressSnapshot(shipping))
                 .build());
 
+        // Save OrderItems with per-line VAT snapshot (ATS-26)
         final List<OrderItem> orderItems = cartItems.stream()
                 .map(cartItem -> createOrderItemSnapshot(order, cartItem))
                 .toList();
@@ -100,30 +136,65 @@ public class OrderCreationServiceImpl implements OrderCreationService {
         cartItemRepository.deleteAll(cartItems);
         cartItemRepository.flush();
 
-        outboxEventPublisher.publishEvent("ORDER", order.getOrderNumber(), "banhang.order.created", 
-                java.util.Map.of("orderId", order.getOrderId(), "orderNumber", order.getOrderNumber()));
+        outboxEventPublisher.publishEvent("ORDER", order.getOrderNumber(), "banhang.order.created",
+                Map.of("orderId", order.getOrderId(), "orderNumber", order.getOrderNumber()));
 
         return new CreateOrderResponse(
                 order.getOrderNumber(),
                 order.getStatus(),
-                order.getTotalAmount(),
+                order.getTotalBeforeVat(),
+                order.getTotalVatAmount(),
                 shipping.shippingFee(),
+                order.getTotalAmount(),
                 order.getCreatedAt());
     }
 
+    // -------------------------------------------------------------------------
+    // Private helpers
+    // -------------------------------------------------------------------------
+
+    /**
+     * ATS-26: Create OrderItem snapshot with per-line VAT captured from Category at order time.
+     */
     private static OrderItem createOrderItemSnapshot(final Order order, final CartItem cartItem) {
+        final BigDecimal subtotal = cartItem.getUnitPrice()
+                .multiply(BigDecimal.valueOf(cartItem.getQuantity()));
+        final BigDecimal vatRate = resolveVatRate(cartItem);
+        final BigDecimal vatAmount = computeVatAmount(cartItem, subtotal);
+
         return OrderItem.builder()
                 .order(order)
                 .productId(cartItem.getProduct().getProductId())
                 .productName(cartItem.getProduct().getProductName())
                 .unitPrice(cartItem.getUnitPrice())
                 .quantity(cartItem.getQuantity())
-                .subtotal(calculateSubtotal(cartItem))
+                .subtotal(subtotal)
+                .vatRate(vatRate)
+                .vatAmount(vatAmount)
                 .build();
     }
 
-    private static BigDecimal calculateSubtotal(final CartItem cartItem) {
-        return cartItem.getUnitPrice().multiply(BigDecimal.valueOf(cartItem.getQuantity()));
+    /**
+     * ATS-26: vatAmount = subtotal * vatRate / 100, rounded HALF_UP, 0 decimal places.
+     * Consistent with the rounding rule in ProductServiceImpl.toDetailResponse().
+     */
+    private static BigDecimal computeVatAmount(final CartItem cartItem, final BigDecimal subtotal) {
+        final BigDecimal vatRate = resolveVatRate(cartItem);
+        return subtotal
+                .multiply(vatRate)
+                .divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * ATS-26: Resolve VAT rate from the product's category.
+     * Falls back to 10% if category or vatRate is missing (same fallback as ProductServiceImpl).
+     */
+    private static BigDecimal resolveVatRate(final CartItem cartItem) {
+        final var category = cartItem.getProduct().getCategory();
+        if (category != null && category.getVatRate() != null) {
+            return category.getVatRate();
+        }
+        return BigDecimal.TEN; // fallback 10%
     }
 
     private static String createShippingAddressSnapshot(final ShippingCheckoutInfo shipping) {

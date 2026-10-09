@@ -74,6 +74,8 @@ class OrderOperationsIntegrationTest {
                 .customerId(customer.getCustomerId())
                 .orderNumber(ORDER_NUMBER)
                 .status(OrderStatus.PENDING)
+                .totalBeforeVat(new BigDecimal("115000.00"))
+                .totalVatAmount(new BigDecimal("10000.00"))
                 .totalAmount(new BigDecimal("125000.00"))
                 .shippingAddress("Shipping address snapshot")
                 .build());
