@@ -21,4 +21,10 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select o from Order o where o.orderNumber = :orderNumber")
     Optional<Order> findByOrderNumberForUpdate(@Param("orderNumber") String orderNumber);
+
+    /**
+     * ATS-27: Lookup Order by primary key + customerId for ownership validation in QR generation.
+     * No lock needed — read-only check before entering the transactional QR creation flow.
+     */
+    Optional<Order> findByOrderIdAndCustomerId(Long orderId, Long customerId);
 }
