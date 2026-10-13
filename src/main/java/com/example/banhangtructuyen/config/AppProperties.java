@@ -35,4 +35,29 @@ public class AppProperties {
         /** ATS-18: products with availableQty <= this value are flagged as LOW_STOCK. Default 10. */
         private int lowStockThreshold = 10;
     }
+
+    /**
+     * ATS-27/ATS-28: Payment and QR configuration.
+     */
+    private Payment payment = new Payment();
+
+    @Getter
+    @Setter
+    public static class Payment {
+        /**
+         * ATS-28: Enables the simulated payment confirmation endpoint (POST /api/v1/payments/demo/confirm).
+         * MUST be false in production. Set to true only in local/dev/demo environments.
+         */
+        private boolean demoMode = false;
+
+        /**
+         * ATS-27: QR code validity window in minutes. Default 15 minutes.
+         */
+        private int qrExpiryMinutes = 15;
+
+        /**
+         * ATS-27: Redis TTL (seconds) for payment status cache. Default 960s (15 min + 1 min buffer).
+         */
+        private int statusCacheTtlSeconds = 960;
+    }
 }

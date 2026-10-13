@@ -120,6 +120,11 @@ public class SecurityConfig {
                 .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/v1/cart/**").hasRole("CUSTOMER")
                 .requestMatchers("/api/v1/customers/me", "/api/v1/customers/me/**").hasRole("CUSTOMER")
+                // ATS-27: QR generation and status polling — authenticated customers only
+                .requestMatchers("/api/v1/payments/qr/**").hasRole("CUSTOMER")
+                .requestMatchers("/api/v1/payments/*/status").hasRole("CUSTOMER")
+                // ATS-28: Demo confirmation — ADMIN only; also guarded by app.payment.demo-mode flag
+                .requestMatchers("/api/v1/payments/demo/**").hasRole("ADMIN")
                 .anyRequest().authenticated())
             .oauth2ResourceServer(oauth2 -> oauth2
                 .jwt(jwt -> jwt

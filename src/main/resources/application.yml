@@ -17,6 +17,10 @@ app:
       featured-products: 300
   inventory:
     low-stock-threshold: 10  # ATS-18: products with availableQty <= this value are flagged LOW_STOCK
+  payment:
+    demo-mode: ${PAYMENT_DEMO_MODE:false}  # ATS-28: true = enable simulated confirmation (demo/dev only)
+    qr-expiry-minutes: ${PAYMENT_QR_EXPIRY_MINUTES:15}  # ATS-27: QR validity window
+    status-cache-ttl-seconds: ${PAYMENT_STATUS_CACHE_TTL:960}  # ATS-27: Redis TTL for payment status
   shipping:
     fees:
       LOCAL:
