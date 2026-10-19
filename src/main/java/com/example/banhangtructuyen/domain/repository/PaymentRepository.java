@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface PaymentRepository extends JpaRepository<Payment, Long> {
@@ -29,4 +30,20 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT p FROM Payment p WHERE p.order.orderId = :orderId")
     Optional<Payment> findByOrder_OrderIdForUpdate(@Param("orderId") Long orderId);
+
+    /**
+     * ATS-30: Find all PROCESSING payments whose QR has expired.
+     * Used by {@code PaymentExpiryScheduler} to identify orders that must be auto-cancelled.
+     *
+     * <p>JOIN FETCH order to avoid N+1 when the scheduler iterates over results.
+     */
+    @Query("""
+            SELECT p FROM Payment p
+            JOIN FETCH p.order o
+            WHERE p.status = 'PROCESSING'
+              AND p.qrExpiresAt IS NOT NULL
+              AND p.qrExpiresAt < :now
+              AND o.status = 'PENDING'
+            """)
+    List<Payment> findExpiredProcessingPayments(@Param("now") java.time.Instant now);
 }
