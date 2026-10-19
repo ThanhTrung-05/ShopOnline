@@ -27,4 +27,15 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
      * No lock needed — read-only check before entering the transactional QR creation flow.
      */
     Optional<Order> findByOrderIdAndCustomerId(Long orderId, Long customerId);
+
+    /**
+     * ATS-30: Pessimistic lock on an Order in a specific status.
+     * Used by the expiry scheduler to atomically check-and-lock a PENDING order before cancelling.
+     * Returns empty Optional if order is NOT in the given status — safe concurrent race condition guard.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT o FROM Order o WHERE o.orderId = :orderId AND o.status = :status")
+    Optional<Order> findByOrderIdAndStatusForUpdate(
+            @Param("orderId") Long orderId,
+            @Param("status") com.example.banhangtructuyen.domain.model.OrderStatus status);
 }
