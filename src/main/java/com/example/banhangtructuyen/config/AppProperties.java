@@ -60,4 +60,19 @@ public class AppProperties {
          */
         private int statusCacheTtlSeconds = 960;
     }
+
+    /**
+     * ATS-30: Scheduler configuration for automatic order expiry and reserve release.
+     */
+    private Scheduler scheduler = new Scheduler();
+
+    @Getter
+    @Setter
+    public static class Scheduler {
+        /**
+         * ATS-30: Cron expression for the payment expiry check job.
+         * Default: every 1 minute. Override per environment via application.yml.
+         */
+        private String paymentExpiryCron = "0 */1 * * * *";
+    }
 }
