@@ -41,9 +41,15 @@ const orders: OrderStatusDetails[] = [
 
 const orderDetails: OrderDetails = {
   ...orders[0],
+  orderId: 1001,
   status: 'DELIVERED',
   updatedAt: '2026-08-28T08:30:00Z',
+  totalBeforeVat: 2_690_909,
+  totalVatAmount: 269_091,
+  shippingFee: 0,
   totalAmount: 2_960_000,
+  shippingAddress: 'Nguyễn Văn A, 0912345678, 123 Nguyễn Trãi, Quận 1, TP.HCM',
+  paymentStatus: 'SUCCESS',
   items: [
     {
       productId: 501,
@@ -51,6 +57,9 @@ const orderDetails: OrderDetails = {
       unitPrice: 1_250_000,
       quantity: 2,
       subtotal: 2_500_000,
+      vatRate: 10,
+      vatAmount: 250_000,
+      subtotalIncludingVat: 2_750_000,
     },
     {
       productId: 502,
@@ -58,6 +67,9 @@ const orderDetails: OrderDetails = {
       unitPrice: 450_000,
       quantity: 1,
       subtotal: 450_000,
+      vatRate: 10,
+      vatAmount: 45_000,
+      subtotalIncludingVat: 495_000,
     },
   ],
 };

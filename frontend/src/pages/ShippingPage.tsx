@@ -116,7 +116,8 @@ export default function ShippingPage() {
       });
       clearLocalCart();
       toast.success(`Đặt hàng thành công: ${response.data.data.orderNumber}`);
-      navigate('/orders/status');
+      // ATS-39: Redirect to QR payment screen, not directly to order status.
+      navigate(`/payment?orderId=${response.data.data.orderId}`);
     } catch (requestError) {
       const message = getApiErrorMessage(requestError, 'Không thể đặt hàng.');
       setOrderError(message);

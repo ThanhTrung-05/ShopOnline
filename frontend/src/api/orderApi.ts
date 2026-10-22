@@ -1,6 +1,7 @@
 import apiClient from './axios';
 import type { ApiResponse } from '../types';
 import type { ShippingMethod } from './shippingApi';
+import type { PaymentStatus } from './paymentApi';
 
 export type OrderStatus =
   | 'PENDING'
@@ -25,10 +26,22 @@ export interface OrderItemDetails {
   unitPrice: number;
   quantity: number;
   subtotal: number;
+  vatRate: number;
+  vatAmount: number;
+  subtotalIncludingVat: number;
 }
 
+/** ATS-39/ATS-41: Extended with VAT breakdown, shippingAddress and paymentStatus */
 export interface OrderDetails extends OrderStatusDetails {
+  orderId: number;
+  totalBeforeVat: number;
+  totalVatAmount: number;
+  shippingFee: number;
   totalAmount: number;
+  /** Shipping address snapshot captured at order-creation time */
+  shippingAddress: string;
+  /** Current payment status from backend; null if no payment record yet */
+  paymentStatus: PaymentStatus | null;
   items: OrderItemDetails[];
 }
 
@@ -37,11 +50,15 @@ export interface CreateOrderRequest {
   shippingMethod: ShippingMethod;
 }
 
+/** ATS-39: orderId is now included so the frontend can immediately call the QR API */
 export interface CreatedOrderSummary {
+  orderId: number;
   orderNumber: string;
   status: OrderStatus;
-  totalAmount: number;
+  totalBeforeVat: number;
+  totalVatAmount: number;
   shippingFee: number;
+  totalAmount: number;
   createdAt: string;
 }
 
@@ -65,3 +82,4 @@ export const orderApi = {
       `/customers/me/orders/${encodeURIComponent(orderNumber)}`,
     ),
 };
+

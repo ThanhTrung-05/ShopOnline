@@ -11,9 +11,15 @@ import java.time.Instant;
  * Now includes the full VAT breakdown so the frontend displays
  * the correct pre-VAT, VAT and post-VAT totals from the backend.
  * Frontend must NOT calculate totals itself.
+ *
+ * <p>ATS-39: Added orderId — required by the frontend to call the QR generation API
+ * (GET /api/v1/payments/qr/{orderId}) immediately after order creation.
  */
-@Schema(description = "Order creation response with full VAT breakdown (ATS-26)")
+@Schema(description = "Order creation response with full VAT breakdown (ATS-26, ATS-39)")
 public record CreateOrderResponse(
+
+        @Schema(description = "Internal order ID (used by QR payment API)", example = "1001")
+        Long orderId,
 
         @Schema(description = "Business-facing order number", example = "ORD-20261009-AB12CD34")
         String orderNumber,

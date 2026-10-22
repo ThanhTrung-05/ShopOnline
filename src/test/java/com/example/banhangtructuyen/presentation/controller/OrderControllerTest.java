@@ -82,6 +82,7 @@ class OrderControllerTest {
                 new ShippingSelectionRequest(42L, ShippingMethod.STANDARD);
         when(orderCreationService.createOrder(CUSTOMER_SUBJECT, request))
                 .thenReturn(new CreateOrderResponse(
+                        1001L,                           // orderId (ATS-39)
                         "ORD-20260907-ABCDEF12",
                         OrderStatus.PENDING,
                         new BigDecimal("39000.00"),   // totalBeforeVat
@@ -273,7 +274,7 @@ class OrderControllerTest {
                 .andExpect(jsonPath("$.data.items[0].subtotal").value(2500000.00))
                 .andExpect(jsonPath("$.data.items[1].productName").value("Wireless Mouse"))
                 .andExpect(jsonPath("$.data.customerId").doesNotExist())
-                .andExpect(jsonPath("$.data.orderId").doesNotExist())
+                .andExpect(jsonPath("$.data.orderId").value(100))        // ATS-39: orderId is now exposed
                 .andExpect(jsonPath("$.data.items[0].orderItemId").doesNotExist());
 
         verify(authenticatedCustomerResolver).resolveActiveCustomer(CUSTOMER_SUBJECT);
@@ -407,11 +408,17 @@ class OrderControllerTest {
 
     private static OrderDetailResponse sampleOrderDetails() {
         return new OrderDetailResponse(
+                100L,                               // orderId (ATS-39)
                 ORDER_NUMBER,
                 OrderStatus.SHIPPING,
                 CREATED_AT,
                 UPDATED_AT,
-                new BigDecimal("2960000.00"),
+                new BigDecimal("2690909.00"),        // totalBeforeVat
+                new BigDecimal("269091.00"),         // totalVatAmount
+                new BigDecimal("0.00"),              // shippingFee
+                new BigDecimal("2960000.00"),        // totalAmount
+                "Nguyễn Văn A, 0912345678, 123 Lê Lợi", // shippingAddress
+                null,                               // paymentStatus (not paid yet)
                 List.of(
                         new OrderItemResponse(
                                 501L,

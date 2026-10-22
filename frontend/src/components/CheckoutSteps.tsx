@@ -1,11 +1,12 @@
 import { Link } from 'react-router-dom';
 
-type CheckoutStep = 'cart' | 'shipping' | 'complete';
+type CheckoutStep = 'cart' | 'shipping' | 'payment' | 'complete';
 
 const steps: Array<{ id: CheckoutStep; label: string; number: string }> = [
   { id: 'cart', label: 'Giỏ hàng', number: '1' },
   { id: 'shipping', label: 'Giao hàng', number: '2' },
-  { id: 'complete', label: 'Hoàn tất', number: '3' },
+  { id: 'payment', label: 'Thanh toán', number: '3' },
+  { id: 'complete', label: 'Hoàn tất', number: '4' },
 ];
 
 export default function CheckoutSteps({ active }: { active: CheckoutStep }) {
