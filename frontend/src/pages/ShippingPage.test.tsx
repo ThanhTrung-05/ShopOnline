@@ -76,10 +76,13 @@ const preparation: ShippingPreparation = {
 };
 
 const createdOrder: CreatedOrderSummary = {
+  orderId: 999,
   orderNumber: 'ORD-20260907-ABCDEF12',
   status: 'PENDING',
-  totalAmount: 79000,
-  shippingFee: 40000,
+  totalBeforeVat: 35_455,
+  totalVatAmount: 3_545,
+  shippingFee: 40_000,
+  totalAmount: 79_000,
   createdAt: '2026-09-07T02:00:00Z',
 };
 
@@ -90,6 +93,8 @@ function renderPage() {
     <MemoryRouter initialEntries={['/shipping']}>
       <Routes>
         <Route path="/shipping" element={<ShippingPage />} />
+        {/* ATS-39: ShippingPage now redirects to /payment after order creation */}
+        <Route path="/payment" element={<div data-testid="payment-page">Payment Page</div>} />
         <Route path="/orders/status" element={<OrderStatusPage />} />
       </Routes>
     </MemoryRouter>,
@@ -280,8 +285,8 @@ describe('ShippingPage', () => {
     expect(toast.success).toHaveBeenCalledWith(
       `Đặt hàng thành công: ${createdOrder.orderNumber}`,
     );
-    expect(await screen.findByText(createdOrder.orderNumber)).toBeInTheDocument();
-    expect(orderApi.list).toHaveBeenCalledTimes(1);
+    // ATS-39: After placing order, navigate to /payment page (not /orders/status)
+    expect(await screen.findByTestId('payment-page')).toBeInTheDocument();
   });
 
   it('prevents a double submit while order creation is pending', async () => {

@@ -140,6 +140,7 @@ public class OrderCreationServiceImpl implements OrderCreationService {
                 Map.of("orderId", order.getOrderId(), "orderNumber", order.getOrderNumber()));
 
         return new CreateOrderResponse(
+                order.getOrderId(),          // ATS-39: needed for QR payment API
                 order.getOrderNumber(),
                 order.getStatus(),
                 order.getTotalBeforeVat(),

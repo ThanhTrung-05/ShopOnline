@@ -9,6 +9,7 @@ import com.example.banhangtructuyen.domain.model.OrderItem;
 import com.example.banhangtructuyen.domain.model.OrderStatus;
 import com.example.banhangtructuyen.domain.repository.OrderItemRepository;
 import com.example.banhangtructuyen.domain.repository.OrderRepository;
+import com.example.banhangtructuyen.domain.repository.PaymentRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -43,11 +44,14 @@ class OrderStatusServiceImplTest {
     @Mock
     private OrderItemRepository orderItemRepository;
 
+    @Mock
+    private PaymentRepository paymentRepository;
+
     private OrderStatusService service;
 
     @BeforeEach
     void setUp() {
-        service = new OrderStatusServiceImpl(orderRepository, orderItemRepository);
+        service = new OrderStatusServiceImpl(orderRepository, orderItemRepository, paymentRepository);
     }
 
     @Test
@@ -82,6 +86,9 @@ class OrderStatusServiceImplTest {
                 .thenReturn(Optional.of(order));
         when(orderItemRepository.findAllByOrder_OrderIdOrderByOrderItemIdAsc(order.getOrderId()))
                 .thenReturn(items);
+        // ATS-41: paymentStatus lookup — return empty (no payment yet created in this unit test)
+        when(paymentRepository.findByOrder_OrderId(order.getOrderId()))
+                .thenReturn(Optional.empty());
 
         final OrderDetailResponse response = service.getOrderDetails(ORDER_NUMBER, CUSTOMER_ID);
 
@@ -213,7 +220,10 @@ class OrderStatusServiceImplTest {
                 .orderNumber(ORDER_NUMBER)
                 .customerId(CUSTOMER_ID)
                 .status(OrderStatus.SHIPPING)
+                .totalBeforeVat(new BigDecimal("2690909.00"))
+                .totalVatAmount(new BigDecimal("269091.00"))
                 .totalAmount(new BigDecimal("2960000.00"))
+                .shippingAddress("Nguyễn Văn A, 0912345678, 123 Lê Lợi")
                 .createdAt(CREATED_AT)
                 .updatedAt(UPDATED_AT)
                 .build();

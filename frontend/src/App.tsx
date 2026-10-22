@@ -14,6 +14,8 @@ import CartPage from './pages/CartPage';
 import ProfilePage from './pages/ProfilePage';
 import AddressesPage from './pages/AddressesPage';
 import ShippingPage from './pages/ShippingPage';
+import PaymentPage from './pages/PaymentPage';
+import OrderSuccessPage from './pages/OrderSuccessPage';
 import OrderStatusPage from './pages/OrderStatusPage';
 import OperationsOrderPage from './pages/OperationsOrderPage';
 import AdminProductPage from './pages/AdminProductPage';
@@ -343,6 +345,10 @@ export default function App() {
           <Route path="/profile" element={<AuthGate><ProfilePage /></AuthGate>} />
           <Route path="/addresses" element={<AuthGate><AddressesPage /></AuthGate>} />
           <Route path="/shipping" element={<AuthGate><ShippingPage /></AuthGate>} />
+          {/* ATS-39: QR payment screen — after order is created */}
+          <Route path="/payment" element={<AuthGate><PaymentPage /></AuthGate>} />
+          {/* ATS-41: Order success confirmation */}
+          <Route path="/order-success" element={<AuthGate><OrderSuccessPage /></AuthGate>} />
           <Route path="/orders/status" element={<AuthGate><OrderStatusPage /></AuthGate>} />
           <Route path="/admin/products" element={<AuthGate requiredRole="ADMIN"><AdminProductPage /></AuthGate>} />
           <Route path="/admin/categories" element={<AuthGate requiredRole="ADMIN"><AdminCategoryPage /></AuthGate>} />
