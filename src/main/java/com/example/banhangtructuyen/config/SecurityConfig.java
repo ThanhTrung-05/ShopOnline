@@ -119,6 +119,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/v1/operations/**").hasAnyRole("ADMIN", "WAREHOUSE_STAFF")
                 .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/v1/cart/**").hasRole("CUSTOMER")
+                .requestMatchers("/api/v1/orders/**").hasRole("CUSTOMER")
                 .requestMatchers("/api/v1/customers/me", "/api/v1/customers/me/**").hasRole("CUSTOMER")
                 // ATS-27: QR generation and status polling — authenticated customers only
                 .requestMatchers("/api/v1/payments/qr/**").hasRole("CUSTOMER")
