@@ -42,14 +42,19 @@ public class CartServiceImpl implements CartService {
     @Transactional(readOnly = true)
     public CartResponse getCurrentCart(final String keycloakSubject) {
         final Customer customer = authenticatedCustomerResolver.resolveActiveCustomer(keycloakSubject);
-        if (cartRepository.findByCustomerId(customer.getCustomerId()).isEmpty()) {
-            return emptyCart();
-        }
 
-        final List<CartViewItemResponse> items = cartItemRepository.findViewItemsByCustomerId(customer.getCustomerId())
+        // ATS-66: Single query — findViewItemsByCustomerId returns empty list when no cart exists,
+        // avoiding the redundant cart-exists check (eliminates one round-trip to DB).
+        final List<CartViewItemResponse> items = cartItemRepository
+                .findViewItemsByCustomerId(customer.getCustomerId())
                 .stream()
                 .map(CartServiceImpl::toViewItemResponse)
                 .toList();
+
+        if (items.isEmpty()) {
+            return emptyCart();
+        }
+
         final BigDecimal subtotal = items.stream()
                 .map(CartViewItemResponse::itemSubtotal)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);

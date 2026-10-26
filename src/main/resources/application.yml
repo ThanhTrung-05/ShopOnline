@@ -10,6 +10,9 @@ spring:
         format_sql: true
 
 app:
+  # ATS-42: Redis cache TTL configuration for product endpoints.
+  # Values are in seconds. Reduce product-list TTL if Flash Sale requires near-real-time
+  # price/stock accuracy. Never cache personal data (cart, orders) here.
   redis:
     ttl:
       product-list: 300

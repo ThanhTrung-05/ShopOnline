@@ -3,6 +3,16 @@ spring:
     url: ${ORACLE_URL:jdbc:oracle:thin:@localhost:1522/XEPDB1}
     username: ${ORACLE_USER}
     password: ${ORACLE_PASSWORD}
+    # ATS-42: HikariCP connection pool — explicit config prevents silent use of defaults.
+    # Local dev: pool-size=10 is sufficient for single-developer workload.
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX:10}
+      minimum-idle: ${DB_POOL_MIN_IDLE:5}
+      connection-timeout: 30000       # 30s — fail fast if all connections busy
+      idle-timeout: 600000            # 10m — release idle connections
+      max-lifetime: 1800000           # 30m — recycle connections (Oracle default timeout ~30m)
+      validation-timeout: 5000        # 5s — quick validation
+      pool-name: BHTTPool-Local
   jpa:
     hibernate:
       ddl-auto: update

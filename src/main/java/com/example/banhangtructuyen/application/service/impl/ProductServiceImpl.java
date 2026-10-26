@@ -22,6 +22,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.redis.core.Cursor;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,9 +31,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -308,12 +310,33 @@ public class ProductServiceImpl implements ProductService {
         log.debug("Product cache evicted: productId={}", productId);
     }
 
-    /** Evict all cached product list pages after a product is created/updated/deleted. */
+    /**
+     * ATS-42: Evict all cached product list pages after a product is created/updated/deleted.
+     *
+     * <p>Uses SCAN instead of KEYS to avoid blocking the Redis single thread.
+     * KEYS is O(N) across the entire keyspace and blocks all other Redis clients
+     * while running — dangerous under load. SCAN iterates incrementally.
+     */
     private void evictListCache() {
         redisTemplate.delete(CacheKeys.FEATURED_PRODUCTS);
-        final Set<String> keys = redisTemplate.keys("product:list:*");
-        if (keys != null && !keys.isEmpty()) {
-            redisTemplate.delete(keys);
+        final String pattern = "product:list:*";
+        final List<String> keysToDelete = new ArrayList<>();
+        try {
+            redisTemplate.executeWithStickyConnection(connection -> {
+                try (final Cursor<byte[]> cursor = connection.keyCommands().scan(
+                        ScanOptions.scanOptions().match(pattern).count(100).build())) {
+                    cursor.forEachRemaining(key -> keysToDelete.add(new String(key)));
+                } catch (final Exception e) {
+                    log.warn("Cache list eviction SCAN error: {}", e.getMessage());
+                }
+                return null;
+            });
+        } catch (final Exception e) {
+            log.warn("Cache list eviction error (falling back to no-op): {}", e.getMessage());
+        }
+        if (!keysToDelete.isEmpty()) {
+            redisTemplate.delete(keysToDelete);
+            log.debug("ATS-42: evicted {} product:list:* cache keys via SCAN", keysToDelete.size());
         }
     }
 
