@@ -49,7 +49,11 @@ class AuthServiceImplTest {
     @BeforeEach
     void setUp() {
         authService = new AuthServiceImpl(
-                customerRepository, registrationPersistenceService, keycloakAdminService);
+                customerRepository,
+                org.mockito.Mockito.mock(org.springframework.security.crypto.password.PasswordEncoder.class),
+                org.mockito.Mockito.mock(com.example.banhangtructuyen.infrastructure.security.JwtService.class),
+                registrationPersistenceService,
+                keycloakAdminService);
     }
 
     private static RegisterRequest validRequest() {

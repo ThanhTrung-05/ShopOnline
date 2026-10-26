@@ -73,6 +73,7 @@ class CartConcurrencyIntegrationTest {
                 cartItemRepository,
                 customerRepository,
                 productRepository,
+                inventoryRepository,
                 new AuthenticatedCustomerResolver(customerRepository));
         clearDatabase();
         fixture = createFixture(true);
