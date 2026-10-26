@@ -11,5 +11,8 @@ public record CartViewItemResponse(
         String productName,
         Integer quantity,
         BigDecimal unitPrice,
-        BigDecimal itemSubtotal
+        BigDecimal itemSubtotal,
+        @Schema(description = "true when the product is INACTIVE or DELETED after being added to cart; "
+                + "checkout will fail for these items")
+        boolean unavailable
 ) {}

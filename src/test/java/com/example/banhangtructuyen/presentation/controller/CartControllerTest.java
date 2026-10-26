@@ -62,8 +62,10 @@ class CartControllerTest {
                         "Lavie 500ml",
                         2,
                         new BigDecimal("5000.00"),
-                        new BigDecimal("10000.00"))),
-                new BigDecimal("10000.00")
+                        new BigDecimal("10000.00"),
+                        false)),
+                new BigDecimal("10000.00"),
+                false
         ));
 
         mockMvc.perform(get("/api/v1/cart")
@@ -76,13 +78,15 @@ class CartControllerTest {
                 .andExpect(jsonPath("$.data.items[0].quantity").value(2))
                 .andExpect(jsonPath("$.data.items[0].unitPrice").value(5000.00))
                 .andExpect(jsonPath("$.data.items[0].itemSubtotal").value(10000.00))
-                .andExpect(jsonPath("$.data.subtotal").value(10000.00));
+                .andExpect(jsonPath("$.data.items[0].unavailable").value(false))
+                .andExpect(jsonPath("$.data.subtotal").value(10000.00))
+                .andExpect(jsonPath("$.data.hasUnavailableItems").value(false));
     }
 
     @Test
     @DisplayName("GET /api/v1/cart returns empty cart")
     void getCurrentCart_shouldReturnEmptyCart() throws Exception {
-        when(cartService.getCurrentCart(SUBJECT)).thenReturn(new CartResponse(List.of(), BigDecimal.ZERO));
+        when(cartService.getCurrentCart(SUBJECT)).thenReturn(new CartResponse(List.of(), BigDecimal.ZERO, false));
 
         mockMvc.perform(get("/api/v1/cart")
                         .with(customerJwt()))

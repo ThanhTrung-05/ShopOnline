@@ -153,13 +153,12 @@ class CartServiceImplTest {
     class GetCurrentCart {
 
         @Test
-        @DisplayName("cart with one item returns item and subtotal")
+        @DisplayName("ATS-66: cart with one item returns item and subtotal (single-query path)")
         void getCurrentCart_shouldReturnOneItemAndSubtotal() {
             final Cart cart = sampleCart();
             final Product product = sampleProduct();
             final CartItem item = sampleCartItem(1000L, cart, product, 2, "5000.00");
             when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
-            when(cartRepository.findByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(cart));
             when(cartItemRepository.findViewItemsByCustomerId(CUSTOMER_ID)).thenReturn(List.of(item));
 
             final CartResponse response = service.getCurrentCart(SUBJECT);
@@ -171,7 +170,11 @@ class CartServiceImplTest {
             assertThat(response.items().get(0).quantity()).isEqualTo(2);
             assertThat(response.items().get(0).unitPrice()).isEqualByComparingTo("5000.00");
             assertThat(response.items().get(0).itemSubtotal()).isEqualByComparingTo("10000.00");
+            assertThat(response.items().get(0).unavailable()).isFalse();
             assertThat(response.subtotal()).isEqualByComparingTo("10000.00");
+            assertThat(response.hasUnavailableItems()).isFalse();
+            // ATS-66: cartRepository must NOT be called — single query optimisation
+            verify(cartRepository, never()).findByCustomerId(any());
         }
 
         @Test
@@ -186,7 +189,6 @@ class CartServiceImplTest {
                     .status(Product.ProductStatus.ACTIVE)
                     .build();
             when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
-            when(cartRepository.findByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(cart));
             when(cartItemRepository.findViewItemsByCustomerId(CUSTOMER_ID)).thenReturn(List.of(
                     sampleCartItem(1000L, cart, productOne, 2, "5000.00"),
                     sampleCartItem(1001L, cart, productTwo, 3, "12000.00")
@@ -198,12 +200,15 @@ class CartServiceImplTest {
             assertThat(response.items().get(0).itemSubtotal()).isEqualByComparingTo("10000.00");
             assertThat(response.items().get(1).itemSubtotal()).isEqualByComparingTo("36000.00");
             assertThat(response.subtotal()).isEqualByComparingTo("46000.00");
+            assertThat(response.hasUnavailableItems()).isFalse();
+            verify(cartRepository, never()).findByCustomerId(any());
         }
 
         @Test
-        @DisplayName("uses CartItem unitPrice even when Product price differs")
+        @DisplayName("ATS-66: uses CartItem unitPrice (snapshot) even when Product price changes after add")
         void getCurrentCart_shouldUseCartItemUnitPrice_whenProductPriceDiffers() {
             final Cart cart = sampleCart();
+            // Product price changed to 9999 after add, but CartItem stores snapshot 5000
             final Product product = Product.builder()
                     .productId(PRODUCT_ID)
                     .productName("Lavie 500ml")
@@ -211,43 +216,113 @@ class CartServiceImplTest {
                     .status(Product.ProductStatus.ACTIVE)
                     .build();
             when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
-            when(cartRepository.findByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(cart));
             when(cartItemRepository.findViewItemsByCustomerId(CUSTOMER_ID)).thenReturn(List.of(
                     sampleCartItem(1000L, cart, product, 4, "5000.00")
             ));
 
             final CartResponse response = service.getCurrentCart(SUBJECT);
 
+            // Cart shows snapshotted price, not current product price
             assertThat(response.items().get(0).unitPrice()).isEqualByComparingTo("5000.00");
             assertThat(response.items().get(0).itemSubtotal()).isEqualByComparingTo("20000.00");
             assertThat(response.subtotal()).isEqualByComparingTo("20000.00");
             verify(productRepository, never()).findActiveById(any());
+            verify(cartRepository, never()).findByCustomerId(any());
         }
 
         @Test
-        @DisplayName("empty cart returns empty items and zero subtotal")
+        @DisplayName("ATS-66: empty cart (has cart row but no items) returns empty items and zero subtotal")
         void getCurrentCart_shouldReturnEmpty_whenCartHasNoItems() {
             when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
-            when(cartRepository.findByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(sampleCart()));
+            // findViewItemsByCustomerId returns empty — same result whether cart row exists or not
             when(cartItemRepository.findViewItemsByCustomerId(CUSTOMER_ID)).thenReturn(List.of());
 
             final CartResponse response = service.getCurrentCart(SUBJECT);
 
             assertThat(response.items()).isEmpty();
             assertThat(response.subtotal()).isEqualByComparingTo("0");
+            verify(cartRepository, never()).findByCustomerId(any());
         }
 
         @Test
-        @DisplayName("no cart returns empty items and zero subtotal")
+        @DisplayName("ATS-66: no cart row at all returns empty items and zero subtotal (single-query path)")
         void getCurrentCart_shouldReturnEmpty_whenCustomerHasNoCart() {
             when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
-            when(cartRepository.findByCustomerId(CUSTOMER_ID)).thenReturn(Optional.empty());
+            // ATS-66 optimisation: no cart row → findViewItemsByCustomerId returns empty list directly
+            when(cartItemRepository.findViewItemsByCustomerId(CUSTOMER_ID)).thenReturn(List.of());
 
             final CartResponse response = service.getCurrentCart(SUBJECT);
 
             assertThat(response.items()).isEmpty();
             assertThat(response.subtotal()).isEqualByComparingTo("0");
-            verify(cartItemRepository, never()).findViewItemsByCustomerId(any());
+            // Key assertion: cartRepository.findByCustomerId must NOT be called
+            verify(cartRepository, never()).findByCustomerId(any());
+        }
+
+        @Test
+        @DisplayName("ATS-66: product INACTIVE after add — unavailable=true, hasUnavailableItems=true")
+        void getCurrentCart_shouldFlagUnavailable_whenProductBecomesInactive() {
+            final Cart cart = sampleCart();
+            final Product inactiveProduct = Product.builder()
+                    .productId(PRODUCT_ID)
+                    .productName("Lavie 500ml")
+                    .price(new BigDecimal("5000.00"))
+                    .status(Product.ProductStatus.INACTIVE)
+                    .build();
+            final CartItem item = sampleCartItem(1000L, cart, inactiveProduct, 2, "5000.00");
+            when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
+            when(cartItemRepository.findViewItemsByCustomerId(CUSTOMER_ID)).thenReturn(List.of(item));
+
+            final CartResponse response = service.getCurrentCart(SUBJECT);
+
+            assertThat(response.items()).hasSize(1);
+            assertThat(response.items().get(0).unavailable()).isTrue();
+            assertThat(response.hasUnavailableItems()).isTrue();
+            assertThat(response.subtotal()).isEqualByComparingTo("10000.00");
+        }
+
+        @Test
+        @DisplayName("ATS-66: product DELETED after add — unavailable=true, hasUnavailableItems=true")
+        void getCurrentCart_shouldFlagUnavailable_whenProductIsDeleted() {
+            final Cart cart = sampleCart();
+            final Product deletedProduct = Product.builder()
+                    .productId(PRODUCT_ID)
+                    .productName("Lavie 500ml")
+                    .price(new BigDecimal("5000.00"))
+                    .status(Product.ProductStatus.DELETED)
+                    .build();
+            final CartItem item = sampleCartItem(1000L, cart, deletedProduct, 1, "5000.00");
+            when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
+            when(cartItemRepository.findViewItemsByCustomerId(CUSTOMER_ID)).thenReturn(List.of(item));
+
+            final CartResponse response = service.getCurrentCart(SUBJECT);
+
+            assertThat(response.items().get(0).unavailable()).isTrue();
+            assertThat(response.hasUnavailableItems()).isTrue();
+        }
+
+        @Test
+        @DisplayName("ATS-66: mixed available and unavailable items — hasUnavailableItems=true")
+        void getCurrentCart_shouldFlagHasUnavailableItems_whenMixedItems() {
+            final Cart cart = sampleCart();
+            final Product activeProduct = sampleProduct();
+            final Product inactiveProduct = Product.builder()
+                    .productId(200L)
+                    .productName("Discontinued Item")
+                    .price(new BigDecimal("3000.00"))
+                    .status(Product.ProductStatus.INACTIVE)
+                    .build();
+            when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
+            when(cartItemRepository.findViewItemsByCustomerId(CUSTOMER_ID)).thenReturn(List.of(
+                    sampleCartItem(1000L, cart, activeProduct, 1, "5000.00"),
+                    sampleCartItem(1001L, cart, inactiveProduct, 2, "3000.00")
+            ));
+
+            final CartResponse response = service.getCurrentCart(SUBJECT);
+
+            assertThat(response.items().get(0).unavailable()).isFalse();
+            assertThat(response.items().get(1).unavailable()).isTrue();
+            assertThat(response.hasUnavailableItems()).isTrue();
         }
 
         @Test

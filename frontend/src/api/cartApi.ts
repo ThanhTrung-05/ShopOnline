@@ -8,11 +8,15 @@ export interface CartItem {
   quantity: number;
   unitPrice: number;
   itemSubtotal: number;
+  /** true when the product is INACTIVE or DELETED; checkout will fail for this item */
+  unavailable: boolean;
 }
 
 export interface Cart {
   items: CartItem[];
   subtotal: number;
+  /** true when at least one item has an unavailable product */
+  hasUnavailableItems: boolean;
 }
 
 export interface AddCartItemRequest {
@@ -27,6 +31,7 @@ export interface UpdateCartItemQuantityRequest {
 export const emptyCart: Cart = {
   items: [],
   subtotal: 0,
+  hasUnavailableItems: false,
 };
 
 export const cartApi = {

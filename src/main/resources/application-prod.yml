@@ -3,6 +3,17 @@ spring:
     url: ${ORACLE_URL}
     username: ${ORACLE_USER}
     password: ${ORACLE_PASSWORD}
+    # ATS-42: HikariCP — sized for production load. Override via env vars without code change.
+    # For Flash Sale: raise DB_POOL_MAX (e.g. 30–50) and ensure Oracle listener can handle it.
+    # Do NOT raise beyond Oracle session limit (default XE: 20 sessions).
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX:20}
+      minimum-idle: ${DB_POOL_MIN_IDLE:10}
+      connection-timeout: 20000       # 20s — faster fail-fast than local dev
+      idle-timeout: 600000            # 10m
+      max-lifetime: 1800000           # 30m — safe below Oracle idle session timeout
+      validation-timeout: 3000        # 3s — tight for production
+      pool-name: BHTTPool-Prod
   jpa:
     hibernate:
       ddl-auto: update
