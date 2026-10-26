@@ -5,6 +5,7 @@ import { getApiErrorMessage } from '../utils/apiError';
 interface CartState {
   items: CartItem[];
   subtotal: number;
+  hasUnavailableItems: boolean;
   isLoading: boolean;
   error: string | null;
   loadCart: () => Promise<void>;
@@ -27,6 +28,7 @@ function clearLegacyCartStorage() {
 export const useCartStore = create<CartState>((set, get) => ({
   items: [],
   subtotal: 0,
+  hasUnavailableItems: false,
   isLoading: false,
   error: null,
 
@@ -38,6 +40,7 @@ export const useCartStore = create<CartState>((set, get) => ({
       set({
         items: cart.items,
         subtotal: cart.subtotal,
+        hasUnavailableItems: cart.hasUnavailableItems,
         isLoading: false,
         error: null,
       });
@@ -68,6 +71,6 @@ export const useCartStore = create<CartState>((set, get) => ({
 
   clearLocal: () => {
     clearLegacyCartStorage();
-    set({ items: [], subtotal: 0, isLoading: false, error: null });
+    set({ items: [], subtotal: 0, hasUnavailableItems: false, isLoading: false, error: null });
   },
 }));

@@ -58,8 +58,9 @@ public class CartServiceImpl implements CartService {
         final BigDecimal subtotal = items.stream()
                 .map(CartViewItemResponse::itemSubtotal)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+        final boolean hasUnavailable = items.stream().anyMatch(CartViewItemResponse::unavailable);
 
-        return new CartResponse(items, subtotal);
+        return new CartResponse(items, subtotal, hasUnavailable);
     }
 
     @Override
@@ -170,17 +171,20 @@ public class CartServiceImpl implements CartService {
     private static CartViewItemResponse toViewItemResponse(final CartItem item) {
         final BigDecimal itemSubtotal = item.getUnitPrice()
                 .multiply(BigDecimal.valueOf(item.getQuantity()));
+        // ATS-66: flag item as unavailable when product is no longer ACTIVE
+        final boolean unavailable = item.getProduct().getStatus() != Product.ProductStatus.ACTIVE;
         return new CartViewItemResponse(
                 item.getCartItemId(),
                 item.getProduct().getProductId(),
                 item.getProduct().getProductName(),
                 item.getQuantity(),
                 item.getUnitPrice(),
-                itemSubtotal
+                itemSubtotal,
+                unavailable
         );
     }
 
     private static CartResponse emptyCart() {
-        return new CartResponse(List.of(), BigDecimal.ZERO);
+        return new CartResponse(List.of(), BigDecimal.ZERO, false);
     }
 }

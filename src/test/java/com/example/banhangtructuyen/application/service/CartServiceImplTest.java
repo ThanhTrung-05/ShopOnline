@@ -170,7 +170,9 @@ class CartServiceImplTest {
             assertThat(response.items().get(0).quantity()).isEqualTo(2);
             assertThat(response.items().get(0).unitPrice()).isEqualByComparingTo("5000.00");
             assertThat(response.items().get(0).itemSubtotal()).isEqualByComparingTo("10000.00");
+            assertThat(response.items().get(0).unavailable()).isFalse();
             assertThat(response.subtotal()).isEqualByComparingTo("10000.00");
+            assertThat(response.hasUnavailableItems()).isFalse();
             // ATS-66: cartRepository must NOT be called — single query optimisation
             verify(cartRepository, never()).findByCustomerId(any());
         }
@@ -198,6 +200,7 @@ class CartServiceImplTest {
             assertThat(response.items().get(0).itemSubtotal()).isEqualByComparingTo("10000.00");
             assertThat(response.items().get(1).itemSubtotal()).isEqualByComparingTo("36000.00");
             assertThat(response.subtotal()).isEqualByComparingTo("46000.00");
+            assertThat(response.hasUnavailableItems()).isFalse();
             verify(cartRepository, never()).findByCustomerId(any());
         }
 
@@ -257,10 +260,9 @@ class CartServiceImplTest {
         }
 
         @Test
-        @DisplayName("ATS-66: product INACTIVE after add — still visible in cart (snapshot behaviour, checkout will reject)")
-        void getCurrentCart_shouldStillReturnItem_whenProductBecomesInactive() {
+        @DisplayName("ATS-66: product INACTIVE after add — unavailable=true, hasUnavailableItems=true")
+        void getCurrentCart_shouldFlagUnavailable_whenProductBecomesInactive() {
             final Cart cart = sampleCart();
-            // Product was ACTIVE when added, now INACTIVE — but CartItem snapshot remains
             final Product inactiveProduct = Product.builder()
                     .productId(PRODUCT_ID)
                     .productName("Lavie 500ml")
@@ -273,11 +275,54 @@ class CartServiceImplTest {
 
             final CartResponse response = service.getCurrentCart(SUBJECT);
 
-            // Cart view returns the item regardless of product status (DB join without status filter)
-            // Checkout will fail at findActiveById() — this is current behaviour, not a bug.
             assertThat(response.items()).hasSize(1);
-            assertThat(response.items().get(0).productId()).isEqualTo(PRODUCT_ID);
+            assertThat(response.items().get(0).unavailable()).isTrue();
+            assertThat(response.hasUnavailableItems()).isTrue();
             assertThat(response.subtotal()).isEqualByComparingTo("10000.00");
+        }
+
+        @Test
+        @DisplayName("ATS-66: product DELETED after add — unavailable=true, hasUnavailableItems=true")
+        void getCurrentCart_shouldFlagUnavailable_whenProductIsDeleted() {
+            final Cart cart = sampleCart();
+            final Product deletedProduct = Product.builder()
+                    .productId(PRODUCT_ID)
+                    .productName("Lavie 500ml")
+                    .price(new BigDecimal("5000.00"))
+                    .status(Product.ProductStatus.DELETED)
+                    .build();
+            final CartItem item = sampleCartItem(1000L, cart, deletedProduct, 1, "5000.00");
+            when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
+            when(cartItemRepository.findViewItemsByCustomerId(CUSTOMER_ID)).thenReturn(List.of(item));
+
+            final CartResponse response = service.getCurrentCart(SUBJECT);
+
+            assertThat(response.items().get(0).unavailable()).isTrue();
+            assertThat(response.hasUnavailableItems()).isTrue();
+        }
+
+        @Test
+        @DisplayName("ATS-66: mixed available and unavailable items — hasUnavailableItems=true")
+        void getCurrentCart_shouldFlagHasUnavailableItems_whenMixedItems() {
+            final Cart cart = sampleCart();
+            final Product activeProduct = sampleProduct();
+            final Product inactiveProduct = Product.builder()
+                    .productId(200L)
+                    .productName("Discontinued Item")
+                    .price(new BigDecimal("3000.00"))
+                    .status(Product.ProductStatus.INACTIVE)
+                    .build();
+            when(customerRepository.findByKeycloakUserId(SUBJECT)).thenReturn(Optional.of(sampleCustomer()));
+            when(cartItemRepository.findViewItemsByCustomerId(CUSTOMER_ID)).thenReturn(List.of(
+                    sampleCartItem(1000L, cart, activeProduct, 1, "5000.00"),
+                    sampleCartItem(1001L, cart, inactiveProduct, 2, "3000.00")
+            ));
+
+            final CartResponse response = service.getCurrentCart(SUBJECT);
+
+            assertThat(response.items().get(0).unavailable()).isFalse();
+            assertThat(response.items().get(1).unavailable()).isTrue();
+            assertThat(response.hasUnavailableItems()).isTrue();
         }
 
         @Test

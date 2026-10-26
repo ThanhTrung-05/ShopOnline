@@ -22,9 +22,11 @@ const backendCart = {
       quantity: 2,
       unitPrice: 5000,
       itemSubtotal: 10000,
+      unavailable: false,
     },
   ],
   subtotal: 10000,
+  hasUnavailableItems: false,
 };
 
 describe('cartStore', () => {
@@ -44,7 +46,22 @@ describe('cartStore', () => {
 
     expect(useCartStore.getState().items).toEqual(backendCart.items);
     expect(useCartStore.getState().subtotal).toBe(10000);
+    expect(useCartStore.getState().hasUnavailableItems).toBe(false);
     expect(useCartStore.getState().error).toBeNull();
+  });
+
+  it('propagates hasUnavailableItems=true from backend response', async () => {
+    const cartWithUnavailable = {
+      ...backendCart,
+      items: [{ ...backendCart.items[0], unavailable: true }],
+      hasUnavailableItems: true,
+    };
+    vi.mocked(cartApi.get).mockResolvedValue({ data: { data: cartWithUnavailable } } as any);
+
+    await useCartStore.getState().loadCart();
+
+    expect(useCartStore.getState().hasUnavailableItems).toBe(true);
+    expect(useCartStore.getState().items[0].unavailable).toBe(true);
   });
 
   it('does not use legacy localStorage as cart source', async () => {
